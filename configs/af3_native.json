@@ -1,0 +1,36 @@
+{
+  "name_tag": "af3_native",
+  "label": "AF3 code + AF3 native weights",
+
+  "image": "/cluster/project/beltrao/shared/alphafold3/images/alphafold3_openbind_1fff5c4_weights.sif",
+  "model_dir": "$HOME/.alphafold3_model_dir",
+  "of3_weights": false,
+
+  "num_recycles": 3,
+  "num_diffusion_samples": 5,
+  "model_seed": 42,
+
+  "slurm": {
+    "gpu": "nvidia_rtx_pro_6000:1",
+    "gpumem": "90g",
+    "cpus": 8,
+    "mem_per_cpu": "8g",
+    "time": "4:00:00"
+  },
+
+  "notes": [
+    "Reference arm. Same container as af3_openbind.json — the AlphaFold3 fork at",
+    "juliabuhmann/alphafold3 @ 1fff5c4 — so the CODE is identical between the two arms",
+    "and any difference is attributable to the weights alone.",
+    "",
+    "model_dir holds af3.bin.zst, the DeepMind-issued AlphaFold3 parameters, which you",
+    "must request separately (see WEIGHTS_TERMS_OF_USE in the AlphaFold 3 repo).",
+    "$HOME and a leading ~ are expanded by run_workflow.sh. --of3_weights is off, so",
+    "run_alphafold.py takes its stock parameter-loading path.",
+    "",
+    "num_recycles=3 rather than AlphaFold3's default of 10: it is what the earlier",
+    "pooled-PPI benchmarks pinned, and both arms here use the same value, so the",
+    "comparison is like-for-like. It does make absolute DockQ here lower than a",
+    "stock-default AF3 run would give — see README, 'Limitations'."
+  ]
+}

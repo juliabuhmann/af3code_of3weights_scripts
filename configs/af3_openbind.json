@@ -1,0 +1,33 @@
+{
+  "name_tag": "af3_openbind",
+  "label": "AF3 code + OpenFold3 openbind weights",
+
+  "image": "/cluster/project/beltrao/shared/alphafold3/images/alphafold3_openbind_1fff5c4_weights.sif",
+  "model_dir": "/models",
+  "of3_weights": true,
+
+  "num_recycles": 3,
+  "num_diffusion_samples": 5,
+  "model_seed": 42,
+
+  "slurm": {
+    "gpu": "nvidia_rtx_pro_6000:1",
+    "gpumem": "90g",
+    "cpus": 8,
+    "mem_per_cpu": "8g",
+    "time": "4:00:00"
+  },
+
+  "notes": [
+    "Test arm. Identical to af3_native.json except for model_dir + of3_weights.",
+    "",
+    "model_dir is INSIDE the image: this .sif ships the converted OpenFold3 openbind",
+    "parameters at /models (of3_ported_weights.bin.zst, 1.3 G) next to a one-line",
+    "`of3_variant` marker reading 'openbind'. run_alphafold.py reads that marker, so",
+    "bare --of3_weights is enough and no --of3_openbind flag is needed. Nothing has to",
+    "be bind-mounted for the weights, which is why the image is 5.4 G rather than 4 G.",
+    "",
+    "Everything else — recycles, diffusion samples, seed, MSAs, templates, GPU — is",
+    "shared with the native arm."
+  ]
+}
