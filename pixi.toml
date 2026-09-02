@@ -1,0 +1,61 @@
+# Pixi manifest — downstream analysis environment.
+#
+# Split of responsibilities in this repo:
+#
+#   inference  runs inside the Singularity image (see configs/*.json). Nothing
+#              from this manifest is involved; the image pins JAX, CUDA and the
+#              AlphaFold3 source, so the prediction step is reproducible on its
+#              own terms.
+#   analysis   everything after inference — dataset build, DockQ scoring,
+#              profiling tables, plots — runs in the `default` environment here.
+#
+# Usage:
+#     pixi run build-dataset
+#     pixi run score-dockq --help
+#     pixi shell                 # interactive
+#
+# Storage note (Euler): $HOME quota is tight. Point pixi off $HOME before the
+# first `pixi install`, e.g. in ~/.bashrc:
+#     export PIXI_HOME=/cluster/project/beltrao/$USER/pixi
+#     export PIXI_CACHE_DIR=$PIXI_HOME/cache
+# and add `detached-environments` in $PIXI_HOME/config.toml if .pixi/ should
+# not live in the repo either.
+#
+# pixi.lock is committed — that is what makes the analysis side reproducible.
+
+[workspace]
+name = "af3code_of3weights_scripts"
+description = "AlphaFold3 code + OpenFold3 openbind weights on the Zheng Benchmark-IV multimers"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.12.*"
+# numpy is held below 2.0 because DockQ 2.1.3 requires it (`numpy<2.0`). Keeping
+# DockQ at the version that reproduced the paper's Table S4 values matters more
+# than a current numpy, so the pin goes here rather than on DockQ.
+numpy = ">=1.26,<2"
+pandas = ">=2.2"
+biopython = ">=1.83"        # mmCIF/PDB parsing in the dataset + scoring stages
+matplotlib = ">=3.8"
+requests = ">=2.31"         # Zenodo record API in 00_fetch_benchmark.py
+tqdm = ">=4.66"
+
+[pypi-dependencies]
+# DockQ is not on conda-forge. 2.1.3 is the version the Zheng & Peng values were
+# reproduced against in the earlier run of this benchmark (bjornwallner/DockQ,
+# the implementation the paper cites).
+DockQ = "==2.1.3"
+
+[tasks]
+# Stage names match the script number prefixes; see README.md for the full order.
+fetch-benchmark = "python scripts/00_fetch_benchmark.py"
+build-dataset   = "python scripts/01_build_dataset.py"
+prepare-msa     = "python scripts/02_prepare_msa.py"
+build-jsons     = "python scripts/03_build_af3_jsons.py"
+collect-profile = "python scripts/04_collect_profiling.py"
+score-dockq     = "python scripts/05_score_dockq.py"
+plot            = "python scripts/06_plot_comparison.py"
+
+# Sanity check that the DockQ the scoring stage shells out to is the pinned version.
+dockq-version = "python -c \"import importlib.metadata as m; print('DockQ', m.version('DockQ'))\""

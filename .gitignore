@@ -1,0 +1,15 @@
+# Pixi environments (pixi.lock IS committed; the solved envs are not)
+.pixi/
+
+# Claude Code machine-local settings (paths, permissions) — never shared
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Bulk run-time data lives under --base-dir, outside the repo. `results/` is the
+# deliberate exception: the figures and the two result tables are small and are
+# meant to be committed, so the repo shows what it produced.
+data/
+*.log
