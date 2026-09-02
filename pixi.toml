@@ -16,7 +16,7 @@
 #
 # Storage note (Euler): $HOME quota is tight. Point pixi off $HOME before the
 # first `pixi install`, e.g. in ~/.bashrc:
-#     export PIXI_HOME=/cluster/project/beltrao/$USER/pixi
+#     export PIXI_HOME=/path/to/scratch/$USER/pixi
 #     export PIXI_CACHE_DIR=$PIXI_HOME/cache
 # and add `detached-environments` in $PIXI_HOME/config.toml if .pixi/ should
 # not live in the repo either.

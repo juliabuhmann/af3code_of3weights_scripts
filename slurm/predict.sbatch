@@ -11,7 +11,7 @@
 # measure the model rather than the pipeline.
 #
 # The two weight arms differ ONLY in MODEL_DIR and OF3_WEIGHTS:
-#   native    MODEL_DIR=/cluster/home/.../.alphafold3_model_dir   OF3_WEIGHTS=0
+#   native    MODEL_DIR=<dir holding af3.bin.zst>          OF3_WEIGHTS=0
 #   openbind  MODEL_DIR=/models  (inside the image)               OF3_WEIGHTS=1
 # Same container, same input JSON, same recycles/samples/seed.
 #

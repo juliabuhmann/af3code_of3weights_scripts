@@ -34,8 +34,8 @@ Usage:
     python scripts/02_prepare_msa.py \
         --dataset-dir <base>/dataset \
         --work-dir    <base>/work \
-        --msa-cache   /cluster/project/beltrao/jbuhmann/ppi/benchmarks/peng_zheng/predictions/zheng_benchmark_iv/af3/af3_native/msa/alphafold3_msas \
-        --subset dimers
+        --msa-cache   /path/to/an/existing/alphafold3_msas \
+        --subset all
 """
 
 import argparse

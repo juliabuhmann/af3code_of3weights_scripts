@@ -17,7 +17,9 @@
 #                        third scoreable arm (symlinks; a sanity check on the harness).
 #   submit-score         The same, as a SLURM job — 2 x <entries> DockQ calls is
 #                        too much for a shared login node.
-#   plot                 Figures into results/figures/.
+#   plot                 Figures into <repo>/results/figures/.
+#   publish-results      Copy the result tables into <repo>/results/, minus the
+#                        columns that name this cluster (for a public repo).
 #
 # Stages up to build-jsons plus everything from collect-profiling on run in the
 # pixi analysis environment; the two submit- stages need SLURM (login node).
@@ -64,12 +66,28 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-DEFAULT_BASE_DIR="/cluster/project/beltrao/jbuhmann/ppi/af3code_of3weights"
-# Existing AlphaFold3 MSA/template cache from the earlier Zheng benchmark. Matched
-# BY SEQUENCE, so the fact that it is keyed by that benchmark's protein ids does
-# not matter. Built with max_template_date 2021-09-30 against the full AF3 DBs.
-DEFAULT_MSA_CACHE="/cluster/project/beltrao/jbuhmann/ppi/benchmarks/peng_zheng/predictions/zheng_benchmark_iv/af3/af3_native/msa/alphafold3_msas"
-DEFAULT_DB_DIR="/cluster/project/alphafold/alphafold3"
+# SITE CONFIGURATION — set these for your cluster, or pass the matching flags.
+# They can also be set in the environment, which is the least invasive way to keep
+# a local setup out of your diffs:
+#
+#   export AF3OF3_BASE_DIR=/scratch/me/af3code_of3weights
+#   export AF3OF3_DB_DIR=/path/to/alphafold3_databases
+#   export AF3OF3_IMAGE=/path/to/alphafold3_openbind_1fff5c4_weights.sif
+#
+# BASE_DIR is the only one that is always needed: everything this pipeline
+# generates goes under it (see the layout at the bottom of this comment block).
+DEFAULT_BASE_DIR="${AF3OF3_BASE_DIR:-/path/to/workdir/af3code_of3weights}"
+
+# OPTIONAL. An existing AlphaFold3 MSA/template cache of <id>_data.json.gz to reuse.
+# Entries are matched BY SEQUENCE, so whatever ids the producing run used are
+# irrelevant. Leave this unset (or point it at an empty directory) to compute every
+# MSA from scratch via --stage submit-msa; set it to skip work you have already done.
+DEFAULT_MSA_CACHE="${AF3OF3_MSA_CACHE:-}"
+
+# The full AlphaFold3 sequence and template databases (uniref90, mgnify, BFD,
+# uniprot, PDB seqres + mmCIFs). Only needed for MSA cache misses. See
+# fetch_databases.sh in the AlphaFold 3 repository.
+DEFAULT_DB_DIR="${AF3OF3_DB_DIR:-/path/to/alphafold3_databases}"
 # AF3's own default. Benchmark-IV entries were all released after 2024-01-01, so
 # this cutoff excludes the targets themselves from the template set.
 MAX_TEMPLATE_DATE="2021-09-30"
@@ -115,7 +133,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$STAGE" ]] || { echo "ERROR: --stage is required (see --help)" >&2; exit 1; }
-[[ ${#MSA_CACHES[@]} -gt 0 ]] || MSA_CACHES=("$DEFAULT_MSA_CACHE")
+if [[ "$BASE_DIR" == /path/to/* ]]; then
+    echo "ERROR: --base-dir is still the placeholder ($BASE_DIR)." >&2
+    echo "       Pass --base-dir, or set AF3OF3_BASE_DIR; see SITE CONFIGURATION in this script." >&2
+    exit 1
+fi
+# An empty default means "no cache to reuse" — not a directory called "".
+[[ ${#MSA_CACHES[@]} -gt 0 ]] || { [[ -n "$DEFAULT_MSA_CACHE" ]] && MSA_CACHES=("$DEFAULT_MSA_CACHE") || MSA_CACHES=(); }
 
 BENCH_DIR="$BASE_DIR/benchmark_iv"
 DATASET_DIR="$BASE_DIR/dataset"
@@ -226,6 +250,11 @@ submit-msa)
     fi
     # The data pipeline never touches the weights, so this stage is arm-independent:
     # fall back to af3_native.json's image when no --config is given.
+    if [[ "$DB_DIR" == /path/to/* || ! -d "$DB_DIR" ]]; then
+        echo "ERROR: --db-dir is not a directory: $DB_DIR" >&2
+        echo "       The AlphaFold3 search databases are needed to build MSAs." >&2
+        exit 1
+    fi
     IMAGE_CONFIG="${CONFIG:-$SCRIPT_DIR/configs/af3_native.json}"
     IMAGE=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['image'])" "$IMAGE_CONFIG")
     LOGS="$LOG_ROOT/msa"; mkdir -p "$LOGS" "$WORK_DIR/msa_store"
@@ -262,7 +291,8 @@ submit-predictions)
     [[ "$N" -gt 0 ]] || { echo "ERROR: $TODO is empty" >&2; exit 1; }
 
     NAME_TAG=$(cfg name_tag)
-    IMAGE=$(cfg image)
+    # AF3OF3_IMAGE overrides the config, so the .sif can move without a config edit.
+    IMAGE="${AF3OF3_IMAGE:-$(cfg image)}"
     MODEL_DIR=$(cfg model_dir)
     # Configs may write $HOME or ~ so they are not tied to one user's home.
     MODEL_DIR="${MODEL_DIR/#\$HOME/$HOME}"; MODEL_DIR="${MODEL_DIR/#\~/$HOME}"
@@ -366,6 +396,11 @@ plot)
     [[ ${#ARGS[@]} -gt 0 ]] || { echo "ERROR: neither dockq.tsv nor profiling.tsv in $RESULTS_DIR" >&2; exit 1; }
     "${PY[@]}" "$SCRIPT_DIR/scripts/06_plot_comparison.py" \
         "${ARGS[@]}" --arm-a "$ARM_A" --arm-b "$ARM_B" --out-dir "$FIGURES_DIR"
+    ;;
+
+publish-results)
+    "${PY[@]}" "$SCRIPT_DIR/scripts/08_publish_results.py" \
+        --results-dir "$RESULTS_DIR" --out-dir "$SCRIPT_DIR/results"
     ;;
 
 *)

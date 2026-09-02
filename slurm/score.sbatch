@@ -47,8 +47,8 @@ echo "node      : $(hostname)"
 echo "started   : $(date -Is)"
 
 # DockQ comes from the pixi analysis environment (pinned 2.1.3 in pixi.toml).
-# PIXI_HOME is inherited via --export=ALL; the environments themselves live under
-# /cluster/project, which compute nodes can read.
+# PIXI_HOME is inherited via --export=ALL, so the environment must live on shared
+# storage that compute nodes can read (not a node-local or login-only path).
 if command -v pixi >/dev/null 2>&1; then
     PY=(pixi run --manifest-path "$REPO_DIR/pixi.toml" python)
 else
