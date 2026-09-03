@@ -1,0 +1,57 @@
+{
+  "name_tag": "of3_openbind_templateoff",
+  "label": "OF3 code + OpenFold3 openbind weights, no templates",
+  "tag": "OF3 code / openbind",
+
+  "engine": "of3",
+  "weights": "openbind",
+  "use_templates": false,
+
+  "of3_src": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/new_of3/openfold-3",
+  "of3_env": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/new_of3/openfold-3/.pixi/envs/openfold3-cuda13",
+  "ckpt": "$HOME/.openfold3/of3-ob-2025-06-30-174k.pt",
+  "runner_yaml": "configs/of3_runner.yml",
+
+  "num_recycles": 3,
+  "num_diffusion_samples": 5,
+  "model_seed": 42,
+
+  "slurm": {
+    "gpu": "nvidia_rtx_pro_6000:1",
+    "gpumem": "90g",
+    "cpus": 8,
+    "mem_per_cpu": "8g",
+    "time": "4:00:00"
+  },
+
+  "notes": [
+    "Third arm: the OpenFold3 CODEBASE on the openbind weights, against the same",
+    "alignments the AF3 arms used. scripts/09_build_of3_inputs.py converts the stage-03",
+    "input JSONs into OF3 query JSONs, so no MSA is recomputed.",
+    "",
+    "WEIGHTS. This is the openbind checkpoint in its native OF3 serialisation",
+    "(of3-ob-2025-06-30-174k.pt). af3_openbind runs the SAME parameters ported into",
+    "AlphaFold3's format inside the container's /models. So af3_openbind vs this arm is",
+    "a code comparison at fixed weights — assuming the port is faithful, which is what",
+    "the port itself claims and is not re-verified here.",
+    "",
+    "use_templates=false, and it is not optional: the converter emits no",
+    "template_cif_paths, so OF3 is run with --use-templates=false and the whole",
+    "comparison is done templates-off. Template conversion is possible but fiddly and",
+    "fails silently when wrong; it is kept out of this repository (see the docstring of",
+    "scripts/09_build_of3_inputs.py). run_workflow.sh refuses an of3 config with",
+    "use_templates=true rather than running one that quietly has none.",
+    "",
+    "RECYCLES. OF3 exposes no --num-recycles flag; num_recycles is set once in its",
+    "architecture config (openfold3/projects/of3_all_atom/config/model_config.py) to 3,",
+    "with no preset in that directory overriding it. That is the same value the AF3 arms",
+    "pin, so recycles are matched across engines. num_recycles is recorded here for",
+    "provenance and is NOT passed on the command line.",
+    "",
+    "num_diffusion_samples and model_seed ARE passed, and match the AF3 arms (5, 42).",
+    "",
+    "of3_src / of3_env / ckpt are cluster paths; override them without editing this",
+    "file via AF3OF3_OF3_SRC, AF3OF3_OF3_ENV and AF3OF3_OF3_CKPT. runner_yaml is",
+    "resolved relative to the repository when it is not absolute."
+  ]
+}

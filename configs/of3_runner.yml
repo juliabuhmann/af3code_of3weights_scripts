@@ -1,0 +1,32 @@
+# OpenFold3 runner settings for the of3_* arms (configs/of3_openbind_templateoff.json).
+#
+# Copied unchanged from ~/src/pooled_ppi_comparison/bw_triton.yml, which is the
+# configuration already exercised on this cluster's RTX Pro 6000 nodes. Kept as-is
+# rather than tuned, so that anything odd in the OF3 arm is attributable to the
+# input conversion and not to a fresh set of kernel flags.
+#
+# No MSA settings appear here on purpose: scripts/09_build_of3_inputs.py names the
+# converted files uniref90_hits.a3m and uniprot_hits.a3m, both of which are already
+# in OF3's default max_seq_counts / aln_order / msas_to_pair, so the defaults do the
+# right thing. Renaming them would silently drop the alignments.
+#
+# No template settings appear here either: this arm runs with --use-templates=false.
+
+model_update:
+  presets:
+    - predict
+    - low_mem
+  custom:
+    settings:
+      memory:
+        eval:
+          use_deepspeed_evo_attention: false
+          use_triton_triangle_kernels: true
+          use_cueq_triangle_kernels: true
+
+data_module_args:
+  num_workers: 0
+  num_workers_validation: 0
+
+output_writer_settings:
+  write_full_confidence_scores: false
