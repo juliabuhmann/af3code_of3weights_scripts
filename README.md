@@ -1,17 +1,19 @@
 # Running OpenFold3 weights with the AlphaFold 3 codebase
 
 ## In a nutshell
+
 This repository runs OpenFold3's weights with the AlphaFold 3 codebase. The weights
 are the same either way, so this should in principle give OpenFold3-level accuracy
 with the AlphaFold 3 implementation's efficiency — on one RTX Pro 6000 that means
 complexes of up to 5500 residues rather than 3500, on less than half the memory at
-3500 residues and at roughly twice the speed there. The accuracy held on the one
-limited benchmark tried here, but broader tests are needed
+3500 residues and at roughly twice the speed there. Against OpenFold3's own codebase
+that held on the one limited benchmark tried here, but broader tests are needed
 ([Limitations](#limitations)). Since AlphaFold 3's code and OpenFold3's weights are
 both Apache 2.0, this setup is open end to end — with no
 access request for restricted weights.
 
 ## Overview
+
 Accompanying scripts for benchmarking the AlphaFold 3 codebase driven with
 **OpenFold3 weights** instead of DeepMind's.
 
@@ -22,8 +24,9 @@ restriction.
 
 The substitution is possible because OpenFold3 set out to be
 ["a bitwise reproduction of DeepMind's AlphaFold3"](https://github.com/aqlaboratory/openfold-3)
-rather than a new architecture. These scripts measure what that substitution does on a
-published protein-complex benchmark.
+rather than a new architecture. These scripts check that the substitution does not
+break anything — that the AlphaFold 3 codebase on OpenFold3's weights predicts what
+OpenFold3's own codebase predicts — and measure what it buys in memory and speed.
 
 | component | licence |
 |---|---|
@@ -36,13 +39,11 @@ published protein-complex benchmark.
 that is the licence for the scripts in this repository. Running the OpenFold3 arm
 needs no DeepMind parameters, and none are redistributed here.
 
-The reference arm in the comparison does use the DeepMind parameters, and those stay
-under their own Terms of Use — as do structures predicted with them. That applies
-only to the reference arm.
+One arm in the published tables, `af3_native`, does use the DeepMind parameters, and
+those stay under their own Terms of Use — as do structures predicted with them. That
+applies to that arm alone; nothing shown below depends on it.
 
 ## Why not just run OpenFold3?
-
-
 
 The OpenFold3 weights work with the OpenFold3 codebase too (obviously), but AlphaFold 3's
 implementation is less GPU-memory hungry and so fits larger complexes on the same
@@ -69,13 +70,11 @@ ghcr.io/juliabuhmann/alphafold3:openbind-1fff5c4
 ```
 
 This repository is the harness around it — dataset prep, SLURM submission, DockQ
-scoring, plots. Start at [`run_workflow.sh`](run_workflow.sh); the two arms are
-[`configs/af3_native.json`](configs/af3_native.json) and
-[`configs/af3_openbind.json`](configs/af3_openbind.json).
+scoring, plots. Start at [`run_workflow.sh`](run_workflow.sh); the two arms compared
+below are [`configs/af3_openbind_templateoff.json`](configs/af3_openbind_templateoff.json)
+and [`configs/of3_openbind_templateoff.json`](configs/of3_openbind_templateoff.json).
 
 ## What was tested
-
-
 
 ### Runtime and memory
 
@@ -94,7 +93,12 @@ loading; details in [`profiling/`](profiling/).
 ![Peak GPU memory and model time against complex size, AlphaFold 3 codebase vs OpenFold3 codebase](profiling/results/vram_and_runtime.png)
 
 ### Performance
+
+Whether the substitution breaks anything, at fixed weights: the AlphaFold 3 codebase
+against OpenFold3's own, on identical inputs.
+
 #### Dataset
+
 **Benchmark-IV** from Zheng & Peng (2025), *A Comprehensive Benchmarking of
 AlphaFold3 for Predicting Biomacromolecules and Their Interactions*, Briefings in
 Bioinformatics ([bbaf616](https://doi.org/10.1093/bib/bbaf616)), taken from the
@@ -106,6 +110,7 @@ accuracy. Both configurations run the same weights, so the comparison between th
 unaffected.
 
 #### Setup
+
 203 of the 206 complexes were predicted with each codebase on the same openbind
 weights, everything else held fixed: same precomputed MSAs, no templates either side,
 3 recycles, 5 diffusion samples, seed 42, same GPU type. Scored with DockQ v2 at
@@ -114,7 +119,10 @@ default settings, as in the paper. Each point is one complex:
 ![DockQ per complex, AlphaFold 3 codebase vs OpenFold3 codebase, both on openbind weights](results/figures_engine/dockq_scatter.png)
 
 Per-complex values, per-interface metrics and inference times are in
-[`results/dockq.tsv`](results/) and [`results/profiling.tsv`](results/).
+[`results/dockq.tsv`](results/dockq.tsv) and
+[`results/profiling.tsv`](results/profiling.tsv), where the `run` column names the arm:
+the two above, plus the templates-on pair on either weight set (`af3_openbind`,
+`af3_native`) and the paper's own predictions (`zheng_af3_local`).
 
 ### How do AlphaFold 3's own weights compare to openbind?
 
@@ -131,7 +139,8 @@ What this benchmark does and does not cover:
 - **Protein–protein interfaces only.** Benchmark-IV multimers are protein-only, so
   nothing here speaks to nucleic acids, ligands or covalent modifications — a large
   part of what AlphaFold 3 is used for.
-- **No real held-out test** To get held-out test performance, this needs to be rerun on a benchmark dataset after openbind's training cutoff (2025).
+- **No real held-out test.** Every target predates openbind's June 2025 training
+  cutoff, so a held-out answer needs a benchmark released after it.
 - **One seed.** Five diffusion samples from seed 42, best-ranked sample scored.
   Seed-to-seed variation is uncharacterised, so small per-complex differences may be
   sampling noise.
