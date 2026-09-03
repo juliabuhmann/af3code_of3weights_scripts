@@ -1,0 +1,43 @@
+{
+  "name_tag": "af3_openbind_templateoff",
+  "label": "AF3 code + OpenFold3 openbind weights, no templates",
+  "tag": "AF3 code / openbind",
+
+  "engine": "af3",
+  "weights": "openbind",
+  "use_templates": false,
+
+  "image": "/cluster/project/beltrao/shared/alphafold3/images/alphafold3_openbind_1fff5c4_weights.sif",
+  "model_dir": "/models",
+  "of3_weights": true,
+
+  "num_recycles": 3,
+  "num_diffusion_samples": 5,
+  "model_seed": 42,
+
+  "slurm": {
+    "gpu": "nvidia_rtx_pro_6000:1",
+    "gpumem": "90g",
+    "cpus": 8,
+    "mem_per_cpu": "8g",
+    "time": "4:00:00"
+  },
+
+  "notes": [
+    "af3_openbind.json with use_templates flipped to false. Nothing else differs, so",
+    "the pair (af3_openbind, af3_openbind_templateoff) isolates the effect of the",
+    "templates alone: same code, same weights, same MSAs, same seed, same GPU type.",
+    "",
+    "AlphaFold3 has no flag that turns templates off at inference (see af3_native.json),",
+    "so slurm/predict.sbatch applies use_templates=false by writing a scratch copy of",
+    "the input JSON with `templates: []` in every protein entity — AlphaFold3's explicit",
+    "'use no templates' value, as opposed to a null/absent `templates`, which under",
+    "--norun_data_pipeline would mean 'unfilled'. The shared work/af3_input/ tree is read",
+    "only, so both arms run off the same MSAs by construction and the number of templates",
+    "actually dropped is recorded per entry in _profiling/<entry>.meta.json.",
+    "",
+    "This arm is also the one matched to of3_openbind_templateoff.json: the OF3",
+    "converter carries no templates over, so a like-for-like code comparison needs the",
+    "AF3 side run without them too."
+  ]
+}
