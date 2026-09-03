@@ -69,8 +69,9 @@ Each codebase was walked up a 500-to-7000-token grid in 500-token steps on one R
 6000, over pools of *n* copies of one real 250-aa chain with its own MSAs; the curves
 end at the largest pool that ran. Memory is the framework's own live-buffer peak (JAX
 `peak_bytes_in_use`, PyTorch `max_memory_allocated`), not `nvidia-smi`, which cannot
-see inside AlphaFold 3's preallocated XLA arena — details in
-[`profiling/`](profiling/).
+see inside AlphaFold 3's preallocated XLA arena. Model time is each engine's own timer
+(AlphaFold 3's log, OpenFold3's `timing.json`), excluding startup and parameter
+loading; details in [`profiling/`](profiling/).
 
 ![Peak GPU memory and model time against complex size, AlphaFold 3 codebase vs OpenFold3 codebase](profiling/results/vram_and_runtime.png)
 

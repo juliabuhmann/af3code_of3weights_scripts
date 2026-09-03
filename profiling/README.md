@@ -127,6 +127,11 @@ at every size. So the curve comes from the frameworks' own counters instead
 | `peak_reserved_mib` | what the allocator held from the driver (AF3: the arena) |
 | `peak_vram_mib` | `nvidia-smi` whole-device high-water, polled once a second |
 
+The runtime panel's `model_s` is each engine's own timer, on the definition
+`scripts/04_collect_profiling.py` uses — AF3's featurisation and inference log lines
+summed, OF3's `runtime_s` from each seed's `timing.json` — and so excludes the
+startup and parameter loading that `wall_s` includes.
+
 The counters are read in a `finally` block, not an `atexit` hook: `atexit` runs
 last-registered-first, so a hook registered before the engine imports its framework
 runs *after* that framework has torn its backend down and reads zeroes. It did, first
