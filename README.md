@@ -33,7 +33,9 @@ only to the reference arm.
 The OpenFold3 weights work with the OpenFold3 codebase too (obviously), but AlphaFold 3's
 implementation is less GPU-memory hungry and so fits larger complexes on the same
 card: tested in-house on an RTX Pro 6000 (90 GB), OpenFold3 topped out at around
-3500 residues while the AlphaFold 3 codebase reached ~5000 on the same hardware.
+3500 residues while the AlphaFold 3 codebase reached ~5000 on the same hardware, and
+it is the faster of the two from ~1500 residues up (see
+[Runtime and memory](#runtime-and-memory)).
 
 ## Getting the code
 
@@ -59,23 +61,38 @@ scoring, plots. Start at [`run_workflow.sh`](run_workflow.sh); the two arms are
 
 ## What was tested
 
+
+
+### Runtime and memory
+
+Each codebase was walked up a 500-to-7000-token grid in 500-token steps on one RTX Pro
+6000, over pools of *n* copies of one real 250-aa chain with its own MSAs; the curves
+end at the largest pool that ran. Memory is the framework's own live-buffer peak (JAX
+`peak_bytes_in_use`, PyTorch `max_memory_allocated`), not `nvidia-smi`, which cannot
+see inside AlphaFold 3's preallocated XLA arena — details in
+[`profiling/`](profiling/).
+
+![Peak GPU memory and model time against complex size, AlphaFold 3 codebase vs OpenFold3 codebase](profiling/results/vram_and_runtime.png)
+
+### Performance
+#### Dataset
 **Benchmark-IV** from Zheng & Peng (2025), *A Comprehensive Benchmarking of
 AlphaFold3 for Predicting Biomacromolecules and Their Interactions*, Briefings in
-Bioinformatics ([bbaf616](https://doi.org/10.1093/bib/bbaf616)): 206 protein
-multimers released after 2024-01-01, ≤40% sequence similarity to AlphaFold 3's
-training set, one per structural cluster. Data comes from the paper's own release,
-[Zenodo 15502855](https://zenodo.org/records/15502855), including the
-`cleanNative.pdb` structures it scores against.
+Bioinformatics ([bbaf616](https://doi.org/10.1093/bib/bbaf616)), taken from the
+paper's own release, [Zenodo 15502855](https://zenodo.org/records/15502855).
 
-203 of the 206 complexes were predicted twice, once per weight set, with everything
-else held fixed: same container, same input JSONs carrying the same precomputed MSAs
-and templates, same 3 recycles, 5 diffusion samples and seed. Interfaces were scored
-with DockQ v2 at default settings — the same tool and settings the paper used.
+It is held out for *AlphaFold 3* but not for openbind — every target predates
+openbind's June 2025 cutoff — so the absolute DockQ values below are not held-out
+accuracy. Both configurations run the same weights, so the comparison between them is
+unaffected.
 
-Each point is one complex, DockQ from the AlphaFold 3 weights against DockQ from the
-OpenFold3 weights:
+#### Setup
+203 of the 206 complexes were predicted with each codebase on the same openbind
+weights, everything else held fixed: same precomputed MSAs, no templates either side,
+3 recycles, 5 diffusion samples, seed 42, same GPU type. Scored with DockQ v2 at
+default settings, as in the paper. Each point is one complex:
 
-![DockQ per complex, AlphaFold 3 weights vs OpenFold3 weights](results/figures/dockq_scatter.png)
+![DockQ per complex, AlphaFold 3 codebase vs OpenFold3 codebase, both on openbind weights](results/figures_engine/dockq_scatter.png)
 
 Per-complex values, per-interface metrics and inference times are in
 [`results/dockq.tsv`](results/) and [`results/profiling.tsv`](results/).
@@ -89,23 +106,17 @@ What this benchmark does and does not cover:
 - **Protein–protein interfaces only.** Benchmark-IV multimers are protein-only, so
   nothing here speaks to nucleic acids, ligands or covalent modifications — a large
   part of what AlphaFold 3 is used for.
-- **No significance test.** None was run, and per-category subsets (smallest n=18)
-  are too small to carry claims on their own.
+- **No real held-out test** To get held-out test performance, this needs to be rerun on a benchmark dataset after openbind's training cutoff (2025).
 - **One seed.** Five diffusion samples from seed 42, best-ranked sample scored.
   Seed-to-seed variation is uncharacterised, so small per-complex differences may be
   sampling noise.
-- **3 recycles, not AlphaFold 3's default of 10.** Matched across both arms, so the
-  comparison between them is unaffected, but absolute values are not on the same
-  footing as a default-parameter run such as the paper's.
-- **Old templates.** Capped at 2021-09-30 (AlphaFold 3's default) while targets are
-  post-2024 — no leakage, but less template information than a current run.
-- **A preview checkpoint.** `of3-ob-2025-06-30-174k` is one intermediate OpenFold3
-  release; later checkpoints may differ.
+- **3 recycles, not AlphaFold 3's default of 10.** Matched across every configuration,
+  so the comparison between them is unaffected, but absolute values are not on the
+  same footing as a default-parameter run such as the paper's.
+- **Templates off.** The comparison shown runs without templates on either side.
 - **Multi-chain DockQ is an interface mean.** Above two chains, DockQ v2 averages
   over native interfaces, which can mask one badly modelled interface;
   `dockq_min_interface` in the results table exposes the worst one.
-- **3 complexes missing.** `8iay`, `8jnw` and `8r6q` lacked precomputed MSAs, so all
-  numbers are over 203 of 206.
 
 ## Credits
 
@@ -115,3 +126,5 @@ image here is built from, is itself a fork of
 from the [OpenFold consortium](https://github.com/aqlaboratory/openfold-3). Thanks to
 Jürgen Jänes for support along the way. This work was carried out in the
 [Beltrao lab](https://beltraolab.com/) at ETH Zurich.
+
+The code in this repository was written by Claude, supervised by Julia Buhmann.
