@@ -9,10 +9,13 @@
 #                        into work/msa_store/, write monomer inputs for the misses.
 #   submit-msa           sbatch the CPU array for those misses (skip if none).
 #   build-jsons          Complex AF3 input JSONs with MSAs + templates inline.
+#   build-of3-inputs     Convert those JSONs into OpenFold3 query JSONs (MSAs only).
 #   submit-predictions   sbatch the GPU array for ONE config (run once per arm).
+#                        Dispatches on the config's `engine`: af3 -> predict.sbatch,
+#                        of3 -> predict_of3.sbatch.
 #   status               How many predictions each arm has finished.
-#   collect-profiling    Inference time + peak GPU memory -> results/profiling.tsv.
-#   score                DockQ vs cleanNative -> results/dockq.tsv (runs HERE).
+#   collect-profiling    Inference time -> results/profiling/<arm>.tsv, one per arm.
+#   score                DockQ vs cleanNative -> results/dockq/<arm>.tsv (runs HERE).
 #   link-paper           Expose Zheng & Peng's own AF3-standalone predictions as a
 #                        third scoreable arm (symlinks; a sanity check on the harness).
 #   submit-score         The same, as a SLURM job — 2 x <entries> DockQ calls is
@@ -21,8 +24,71 @@
 #   publish-results      Copy the result tables into <repo>/results/, minus the
 #                        columns that name this cluster (for a public repo).
 #
-# Stages up to build-jsons plus everything from collect-profiling on run in the
-# pixi analysis environment; the two submit- stages need SLURM (login node).
+# Stages up to build-of3-inputs plus everything from collect-profiling on run in
+# the pixi analysis environment; the two submit- stages need SLURM (login node).
+#
+# RESULTS ARE STORED PER ARM
+# --------------------------
+# Both result tables are split one file per arm:
+#
+#   <base>/results/dockq/<arm>.tsv        from --stage score
+#   <base>/results/profiling/<arm>.tsv    from --stage collect-profiling
+#
+# so learning about one pipeline never costs a rescore of the others. Two knobs make
+# that concrete:
+#
+#   --config <arm>   score/collect only that arm. Adding a fifth arm to four
+#                    existing ones costs that arm's entries, not 5 x 206 DockQ calls.
+#   (default)        all arms, but within each arm only entries not already recorded
+#                    `ok` — so a re-run costs whatever is genuinely outstanding.
+#                    Entries whose status was a timeout or a missing prediction are
+#                    retried; --rescore forces everything.
+#
+# No merged table is kept on disk. --stage plot and --stage publish-results take the
+# directory and concatenate on the fly, so a stale merge cannot contradict the
+# per-arm tables. publish-results is what flattens them into the single sanitised
+# results/dockq.tsv and results/profiling.tsv committed to the repository.
+#
+# GPU PACKING — --chunk-size
+# --------------------------
+# A GPU allocation is expensive to obtain and cheap to keep. On the completed
+# 203-task af3_openbind array, 7.7 GPU-hours of real work spanned 2.6 hours of wall
+# clock at --array-limit 20 — about 6.8x inflation, essentially all of it waiting for
+# SLURM to hand each two-minute task its own GPU.
+#
+# --chunk-size N submits ceil(entries/N) array tasks instead of one per entry, and
+# each task works through N entries in the allocation it holds. The launchers deal
+# the todo list out by STRIDE, not in contiguous blocks: the list is sorted
+# largest-complex-first, so contiguous blocks would hand task 1 every big complex.
+#
+# Startup cost is amortised too, because the compiled-kernel caches are created once
+# per task: AF3's --cache_dir, and OF3's TRITON_CACHE_DIR / TORCH_EXTENSIONS_DIR.
+# That matters most for OF3, where a single-entry task measured 31.9 s of model time
+# inside 117 s of wall clock.
+#
+# Per-entry outputs do not change — still one <entry>.log and one
+# <entry>.meta.json — so stages 04 and 05 are unaffected either way. slurm.time
+# applies per TASK, so raise it in the config when raising --chunk-size; this script
+# warns when the budget cannot cover the chunk.
+#
+# ARMS AND THE TEMPLATES SWITCH
+# -----------------------------
+# An arm is a config in configs/, and it declares three axes — `engine` (af3|of3),
+# `weights` (af3_native|openbind) and `use_templates` (true|false) — plus a
+# `name_tag` that names its output directory. All three are required; nothing is
+# guessed. The config is copied to predictions/<name_tag>/config.json at submit
+# time, and stages 04/05 label every result row from it, so a table can never be
+# read as comparing two arms that in fact differed in their templates.
+#
+# `use_templates` reaches the two engines differently, because they differ:
+#   of3   passed straight through as --use-templates true|false.
+#   af3   AlphaFold3 has no inference-time template flag, so slurm/predict.sbatch
+#         applies it by writing a `templates: []` copy of the input JSON into the
+#         task's node-local scratch. work/af3_input/ always holds the templates-ON
+#         superset and is shared by every AF3 arm — which is what guarantees that
+#         a templates-on and a templates-off arm ran on identical MSAs.
+# Either way the launcher counts what the model actually received and records it in
+# predictions/<name_tag>/_profiling/<entry>.meta.json.
 #
 # Options:
 #   --stage STAGE        Required.
@@ -34,6 +100,13 @@
 #                        Default: $DEFAULT_MSA_CACHE below.
 #   --db-dir DIR         AF3 search databases for submit-msa.
 #   --array-limit N      Max concurrently running array tasks (default 20).
+#   --chunk-size N       How many entries ONE array task runs inside the GPU
+#                        allocation it already holds (default 1 = one entry per
+#                        task, the original behaviour). See GPU PACKING below.
+#   --per-entry-reserve S
+#                        Seconds a task must have left before it starts another
+#                        entry (default 1200). Entries that do not fit are skipped
+#                        and named in the task log, never half-written.
 #   --arm-a / --arm-b    Which two runs `plot` compares (defaults af3_native vs
 #                        af3_openbind). Use --arm-b zheng_af3_local for the
 #                        harness sanity check against the paper's own predictions.
@@ -43,6 +116,8 @@
 #   --score-cpus N       cpus-per-task for submit-score (default 32); the scoring
 #                        script's --jobs is set from it.
 #   --select-by X        best (AF3 ranking_score, default) | maxiptm.
+#   --rescore            Re-run DockQ for entries already recorded ok. Use when the
+#                        scoring changed, not when the predictions did.
 #   --array-spec SPEC    Submit only these array indices, e.g. '127,128' or '1-10'.
 #                        Indices are line numbers in work/predict_todo.txt (or
 #                        msa_todo.txt), which is sorted LARGEST COMPLEX FIRST — so
@@ -100,6 +175,9 @@ MSA_CACHES=()
 DB_DIR="$DEFAULT_DB_DIR"
 ARRAY_LIMIT=20
 ARRAY_SPEC=""
+CHUNK_SIZE=1
+PER_ENTRY_RESERVE=1200
+RESCORE=""
 SCORE_CPUS=32
 FIGURES_DIR_OVERRIDE=""
 ARM_A="af3_native"
@@ -118,16 +196,19 @@ while [[ $# -gt 0 ]]; do
         --msa-cache)   MSA_CACHES+=("$(_val "$@")"); shift 2 ;;
         --db-dir)      DB_DIR=$(_val "$@"); shift 2 ;;
         --array-limit) ARRAY_LIMIT=$(_val "$@"); shift 2 ;;
+        --chunk-size)  CHUNK_SIZE=$(_val "$@"); shift 2 ;;
+        --per-entry-reserve) PER_ENTRY_RESERVE=$(_val "$@"); shift 2 ;;
         --array-spec)  ARRAY_SPEC=$(_val "$@"); shift 2 ;;
         --score-cpus)  SCORE_CPUS=$(_val "$@"); shift 2 ;;
         --figures-dir) FIGURES_DIR_OVERRIDE=$(_val "$@"); shift 2 ;;
         --arm-a)       ARM_A=$(_val "$@"); shift 2 ;;
         --arm-b)       ARM_B=$(_val "$@"); shift 2 ;;
         --select-by)   SELECT_BY=$(_val "$@"); shift 2 ;;
+        --rescore)     RESCORE=yes; shift ;;
         --dry-run)     DRY_RUN=1; shift ;;
         --pixi-run)    PIXI_RUN="yes"; shift ;;
         --no-pixi-run) PIXI_RUN="no"; shift ;;
-        -h|--help)     sed -n '2,40p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        -h|--help)     awk 'NR>1 && /^set -euo/{exit} NR>1' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
@@ -177,6 +258,70 @@ for k in keys:
 print('' if d is None else (str(d).lower() if isinstance(d,bool) else d))" "$CONFIG" "$1"
 }
 
+# "4:00:00" / "1-00:30:00" -> seconds. Used to give each task a time budget it can
+# check before starting another entry, instead of being killed part-way through one.
+hms_to_s() {
+    python3 -c "
+import sys
+value = sys.argv[1]
+days, _, clock = value.rpartition('-')
+parts = [float(p) for p in clock.split(':')]
+while len(parts) < 3: parts.insert(0, 0.0)
+print(int((int(days) if days else 0) * 86400 + parts[0] * 3600 + parts[1] * 60 + parts[2]))" "$1"
+}
+
+# Build RUN_ARGS (--run LABEL DIR ...) for the analysis stages. With --config it is
+# just that ONE arm — which is what makes scoring a single pipeline cheap, since the
+# tables are per arm — and without it, every arm on disk. $1, when given, names a
+# subdirectory an arm must have to qualify (e.g. _profiling).
+arm_run_args() {
+    local need="${1:-}"
+    RUN_ARGS=()
+    if [[ -n "$CONFIG" ]]; then
+        require_config
+        local tag dir
+        tag=$(cfg name_tag)
+        dir="$PRED_ROOT/$tag"
+        [[ -d "$dir" ]] || { echo "ERROR: no predictions for arm '$tag': $dir" >&2; exit 1; }
+        RUN_ARGS=(--run "$tag" "$dir")
+    else
+        for d in "$PRED_ROOT"/*/; do
+            [[ -d "$d" ]] || continue
+            [[ -z "$need" || -d "$d/$need" ]] || continue
+            RUN_ARGS+=(--run "$(basename "$d")" "${d%/}")
+        done
+    fi
+    [[ ${#RUN_ARGS[@]} -gt 0 ]] || {
+        echo "ERROR: no arms under $PRED_ROOT${need:+ with a $need directory}" >&2; exit 1; }
+    # RUN_ARGS holds three elements per arm (--run LABEL DIR).
+    echo "arms          : $(( ${#RUN_ARGS[@]} / 3 ))"
+}
+
+# Turn N entries + --chunk-size into a task count and the stride the launchers use.
+# Sets NTASKS and CHUNK_STRIDE. CHUNK_STRIDE=0 tells the launcher "one entry, at line
+# $SLURM_ARRAY_TASK_ID" — byte-for-byte the original behaviour.
+chunk_plan() {
+    local n="$1"
+    if [[ "$CHUNK_SIZE" -le 1 ]]; then
+        NTASKS="$n"; CHUNK_STRIDE=0
+    else
+        NTASKS=$(( (n + CHUNK_SIZE - 1) / CHUNK_SIZE ))
+        # The launcher walks lines i, i+NTASKS, i+2*NTASKS, ..., so the stride IS the
+        # number of tasks; that is what makes every task get a size-balanced mix out
+        # of a list sorted largest-first.
+        CHUNK_STRIDE="$NTASKS"
+        local per_entry=$(( TIME_BUDGET_S / CHUNK_SIZE ))
+        if [[ "$per_entry" -lt "$PER_ENTRY_RESERVE" ]]; then
+            echo "WARNING: slurm.time is $TIME (${TIME_BUDGET_S}s) for --chunk-size $CHUNK_SIZE," >&2
+            echo "         i.e. ${per_entry}s per entry, below --per-entry-reserve ${PER_ENTRY_RESERVE}s." >&2
+            echo "         Tasks will skip their last entries (named in the task log)." >&2
+            echo "         Raise slurm.time in the config, or lower --chunk-size." >&2
+        fi
+    fi
+    echo "entries       : $n"
+    echo "chunking      : --chunk-size $CHUNK_SIZE -> $NTASKS array task(s), stride $CHUNK_STRIDE"
+}
+
 # Array spec for sbatch: an explicit --array-spec wins; otherwise all N tasks
 # throttled to --array-limit concurrent.
 array_spec() {
@@ -218,6 +363,27 @@ submit() {
 require_config() {
     [[ -n "$CONFIG" ]] || { echo "ERROR: --config is required for stage '$STAGE'" >&2; exit 1; }
     [[ -f "$CONFIG" ]] || { echo "ERROR: config not found: $CONFIG" >&2; exit 1; }
+}
+
+# Expand a $HOME / ~ prefix so configs are not tied to one user's home.
+expand_home() { local v="$1"; v="${v/#\$HOME/$HOME}"; printf '%s' "${v/#\~/$HOME}"; }
+
+# `engine`, defaulting to af3 for configs written before the OF3 arm existed.
+cfg_engine() { local e; e=$(cfg engine); printf '%s' "${e:-af3}"; }
+
+# `use_templates` as 1/0. Required and never guessed: an arm whose template state
+# is unknown cannot be compared with one whose is, which is the whole point of
+# recording it. Emits 1/0 on stdout.
+cfg_use_templates() {
+    local v; v=$(cfg use_templates)
+    case "$v" in
+        true)  printf '1' ;;
+        false) printf '0' ;;
+        *) echo "ERROR: $CONFIG must declare \"use_templates\": true or false" >&2
+           echo "       (it is the templates axis of the comparison and is recorded" >&2
+           echo "        in every output row; see ARMS AND THE TEMPLATES SWITCH)" >&2
+           return 1 ;;
+    esac
 }
 
 case "$STAGE" in
@@ -283,21 +449,26 @@ build-jsons)
         --config "$CONFIG" --subset "$SUBSET"
     ;;
 
+build-of3-inputs)
+    require_config
+    [[ "$(cfg_engine)" == "of3" ]] || {
+        echo "ERROR: --config must be an of3-engine config for this stage" >&2
+        echo "       (got engine='$(cfg_engine)' in $CONFIG)" >&2
+        exit 1; }
+    # Reads work/af3_input/ — the SAME JSONs the AF3 arms run on — so the two
+    # engines see the same alignments without recomputing anything.
+    "${PY[@]}" "$SCRIPT_DIR/scripts/09_build_of3_inputs.py" \
+        --af3-input-dir "$WORK_DIR/af3_input" \
+        --out-dir "$WORK_DIR/of3_input" \
+        --todo "$WORK_DIR/of3_todo.txt" \
+        --seed "$(cfg model_seed)" --quiet
+    ;;
+
 submit-predictions)
     require_config
-    TODO="$WORK_DIR/predict_todo.txt"
-    [[ -f "$TODO" ]] || { echo "ERROR: $TODO not found — run --stage build-jsons first" >&2; exit 1; }
-    N=$(grep -c . "$TODO" || true)
-    [[ "$N" -gt 0 ]] || { echo "ERROR: $TODO is empty" >&2; exit 1; }
-
+    ENGINE=$(cfg_engine)
+    USE_TEMPLATES=$(cfg_use_templates) || exit 1
     NAME_TAG=$(cfg name_tag)
-    # AF3OF3_IMAGE overrides the config, so the .sif can move without a config edit.
-    IMAGE="${AF3OF3_IMAGE:-$(cfg image)}"
-    MODEL_DIR=$(cfg model_dir)
-    # Configs may write $HOME or ~ so they are not tied to one user's home.
-    MODEL_DIR="${MODEL_DIR/#\$HOME/$HOME}"; MODEL_DIR="${MODEL_DIR/#\~/$HOME}"
-    OF3=$(cfg of3_weights); [[ "$OF3" == "true" ]] && OF3=1 || OF3=0
-    RECYCLES=$(cfg num_recycles)
     SAMPLES=$(cfg num_diffusion_samples)
     GPU=$(cfg slurm.gpu)
     GPUMEM=$(cfg slurm.gpumem)
@@ -308,29 +479,103 @@ submit-predictions)
     OUT_DIR="$PRED_ROOT/$NAME_TAG"
     LOGS="$LOG_ROOT/$NAME_TAG"
     mkdir -p "$OUT_DIR/_profiling" "$LOGS" "$RESULTS_DIR"
-    # Keep the exact config next to the outputs it produced.
+    # Keep the exact config next to the outputs it produced: stages 04 and 05 read
+    # engine/weights/use_templates back out of it to label every result row.
     cp "$CONFIG" "$OUT_DIR/config.json"
 
-    CMD=(sbatch
-        --job-name="af3_$NAME_TAG"
-        --array="$(array_spec "$N")"
-        --gpus="$GPU"
-        --gres="gpumem:$GPUMEM"
-        --cpus-per-task="$CPUS"
-        --mem-per-cpu="$MEM"
-        --time="$TIME"
-        --output="$LOGS/%x_%A_%a.out"
-        --export="ALL,WORK_DIR=$WORK_DIR,OUT_DIR=$OUT_DIR,IMAGE=$IMAGE,MODEL_DIR=$MODEL_DIR,OF3_WEIGHTS=$OF3,NUM_RECYCLES=$RECYCLES,NUM_DIFFUSION_SAMPLES=$SAMPLES"
-        "$SCRIPT_DIR/slurm/predict.sbatch")
+    TIME_BUDGET_S=$(hms_to_s "$TIME")
+    [[ "$CHUNK_SIZE" -ge 1 ]] || { echo "ERROR: --chunk-size must be >= 1" >&2; exit 1; }
 
-    echo "arm       : $NAME_TAG  ($(cfg label))"
-    echo "tasks     : $N total, submitting array $(array_spec "$N")"
-    echo "image     : $IMAGE"
-    echo "model_dir : $MODEL_DIR   of3_weights=$OF3"
-    echo "out_dir   : $OUT_DIR"
-    submit "${CMD[@]}"
+    echo "arm           : $NAME_TAG  ($(cfg label))"
+    echo "engine        : $ENGINE   weights: $(cfg weights)   use_templates: $(cfg use_templates)"
+
+    case "$ENGINE" in
+    af3)
+        TODO="$WORK_DIR/predict_todo.txt"
+        [[ -f "$TODO" ]] || { echo "ERROR: $TODO not found — run --stage build-jsons first" >&2; exit 1; }
+        N=$(grep -c . "$TODO" || true)
+        [[ "$N" -gt 0 ]] || { echo "ERROR: $TODO is empty" >&2; exit 1; }
+        chunk_plan "$N"
+
+        # AF3OF3_IMAGE overrides the config, so the .sif can move without a config edit.
+        IMAGE="${AF3OF3_IMAGE:-$(cfg image)}"
+        MODEL_DIR=$(expand_home "$(cfg model_dir)")
+        OF3=$(cfg of3_weights); [[ "$OF3" == "true" ]] && OF3=1 || OF3=0
+        RECYCLES=$(cfg num_recycles)
+
+        CMD=(sbatch
+            --job-name="$NAME_TAG"
+            --array="$(array_spec "$NTASKS")"
+            --gpus="$GPU"
+            --gres="gpumem:$GPUMEM"
+            --cpus-per-task="$CPUS"
+            --mem-per-cpu="$MEM"
+            --time="$TIME"
+            --output="$LOGS/%x_%A_%a.out"
+            --export="ALL,WORK_DIR=$WORK_DIR,OUT_DIR=$OUT_DIR,REPO_DIR=$SCRIPT_DIR,IMAGE=$IMAGE,MODEL_DIR=$MODEL_DIR,OF3_WEIGHTS=$OF3,USE_TEMPLATES=$USE_TEMPLATES,NUM_RECYCLES=$RECYCLES,NUM_DIFFUSION_SAMPLES=$SAMPLES,CHUNK_STRIDE=$CHUNK_STRIDE,TIME_BUDGET_S=$TIME_BUDGET_S,PER_ENTRY_RESERVE_S=$PER_ENTRY_RESERVE"
+            "$SCRIPT_DIR/slurm/predict.sbatch")
+
+        echo "array         : submitting $(array_spec "$NTASKS")"
+        echo "image         : $IMAGE"
+        echo "model_dir     : $MODEL_DIR   of3_weights=$OF3"
+        echo "out_dir       : $OUT_DIR"
+        submit "${CMD[@]}"
+        ;;
+    of3)
+        # scripts/09_build_of3_inputs.py converts MSAs only. An of3 arm that declared
+        # use_templates=true would therefore run with none and still report success,
+        # so refuse rather than produce a result that cannot mean what it claims.
+        if [[ "$USE_TEMPLATES" == "1" ]]; then
+            echo "ERROR: $CONFIG sets use_templates=true, but scripts/09_build_of3_inputs.py" >&2
+            echo "       converts MSAs only — the queries carry no template_cif_paths and" >&2
+            echo "       OpenFold3 would silently run without templates. See that script's" >&2
+            echo "       docstring for where the template-aware converter lives." >&2
+            exit 1
+        fi
+        TODO="$WORK_DIR/of3_todo.txt"
+        [[ -f "$TODO" ]] || { echo "ERROR: $TODO not found — run --stage build-of3-inputs first" >&2; exit 1; }
+        N=$(grep -c . "$TODO" || true)
+        [[ "$N" -gt 0 ]] || { echo "ERROR: $TODO is empty" >&2; exit 1; }
+        chunk_plan "$N"
+
+        # Same override idea as AF3OF3_IMAGE: the OF3 checkout, its pixi env and the
+        # checkpoint can move without editing the config.
+        OF3_SRC="${AF3OF3_OF3_SRC:-$(cfg of3_src)}"
+        OF3_ENV="${AF3OF3_OF3_ENV:-$(cfg of3_env)}"
+        CKPT=$(expand_home "${AF3OF3_OF3_CKPT:-$(cfg ckpt)}")
+        RUNNER_YAML=$(cfg runner_yaml)
+        # A relative runner_yaml is repo-relative, so the config stays portable.
+        [[ "$RUNNER_YAML" == /* ]] || RUNNER_YAML="$SCRIPT_DIR/$RUNNER_YAML"
+        for v in OF3_SRC OF3_ENV CKPT RUNNER_YAML; do
+            [[ -n "${!v}" ]] || { echo "ERROR: $CONFIG is missing $(printf '%s' "$v" | tr 'A-Z' 'a-z')" >&2; exit 1; }
+        done
+
+        CMD=(sbatch
+            --job-name="$NAME_TAG"
+            --array="$(array_spec "$NTASKS")"
+            --gpus="$GPU"
+            --gres="gpumem:$GPUMEM"
+            --cpus-per-task="$CPUS"
+            --mem-per-cpu="$MEM"
+            --time="$TIME"
+            --output="$LOGS/%x_%A_%a.out"
+            --export="ALL,WORK_DIR=$WORK_DIR,OUT_DIR=$OUT_DIR,REPO_DIR=$SCRIPT_DIR,OF3_SRC=$OF3_SRC,OF3_ENV=$OF3_ENV,CKPT=$CKPT,RUNNER_YAML=$RUNNER_YAML,USE_TEMPLATES=$USE_TEMPLATES,NUM_DIFFUSION_SAMPLES=$SAMPLES,TODO_FILE=$TODO,CHUNK_STRIDE=$CHUNK_STRIDE,TIME_BUDGET_S=$TIME_BUDGET_S,PER_ENTRY_RESERVE_S=$PER_ENTRY_RESERVE"
+            "$SCRIPT_DIR/slurm/predict_of3.sbatch")
+
+        echo "array         : submitting $(array_spec "$NTASKS")"
+        echo "of3_src       : $OF3_SRC"
+        echo "of3_env       : $OF3_ENV"
+        echo "ckpt          : $CKPT"
+        echo "runner yaml   : $RUNNER_YAML"
+        echo "out_dir       : $OUT_DIR"
+        submit "${CMD[@]}"
+        ;;
+    *)
+        echo "ERROR: unknown engine '$ENGINE' in $CONFIG (expected af3 or of3)" >&2
+        exit 1
+        ;;
+    esac
     ;;
-
 status)
     TODO="$WORK_DIR/predict_todo.txt"
     EXPECTED=$( [[ -f "$TODO" ]] && grep -c . "$TODO" || echo 0 )
@@ -341,30 +586,34 @@ status)
         metas=$(find "$d/_profiling" -name '*.meta.json' 2>/dev/null | wc -l)
         ok=$(grep -l '"exit_code": 0' "$d"/_profiling/*.meta.json 2>/dev/null | wc -l)
         cifs=$(find "$d" -mindepth 2 -name '*_model.cif' 2>/dev/null | wc -l)
-        printf '  %-16s profiled=%-4s exit0=%-4s model_cifs=%s\n' "$tag" "$metas" "$ok" "$cifs"
+        # The arm's axes, from the config copied in at submit time. An arm with no
+        # config.json predates the copy and is reported as unknown rather than guessed.
+        axes="engine=? templates=?"
+        if [[ -f "$d/config.json" ]]; then
+            axes=$(CONFIG="$d/config.json" python3 -c "import json,os
+d=json.load(open(os.environ['CONFIG']))
+t=d.get('use_templates')
+print(f\"engine={d.get('engine','af3')} weights={d.get('weights','?')} \"
+      f\"templates={'?' if t is None else str(t).lower()}\")")
+        fi
+        printf '  %-26s profiled=%-4s exit0=%-4s model_cifs=%-6s %s\n' \
+            "$tag" "$metas" "$ok" "$cifs" "$axes"
     done
     ;;
 
 collect-profiling)
-    RUN_ARGS=()
-    for d in "$PRED_ROOT"/*/; do
-        [[ -d "$d/_profiling" ]] && RUN_ARGS+=(--run "$(basename "$d")" "${d%/}")
-    done
-    [[ ${#RUN_ARGS[@]} -gt 0 ]] || { echo "ERROR: no runs with a _profiling dir under $PRED_ROOT" >&2; exit 1; }
+    arm_run_args _profiling
     "${PY[@]}" "$SCRIPT_DIR/scripts/04_collect_profiling.py" \
         --dataset-dir "$DATASET_DIR" "${RUN_ARGS[@]}" \
-        --out "$RESULTS_DIR/profiling.tsv" --sacct
+        --out-dir "$RESULTS_DIR/profiling" --sacct
     ;;
 
 score)
-    RUN_ARGS=()
-    for d in "$PRED_ROOT"/*/; do
-        [[ -d "$d" ]] && RUN_ARGS+=(--run "$(basename "$d")" "${d%/}")
-    done
-    [[ ${#RUN_ARGS[@]} -gt 0 ]] || { echo "ERROR: no prediction dirs under $PRED_ROOT" >&2; exit 1; }
+    arm_run_args
     "${PY[@]}" "$SCRIPT_DIR/scripts/05_score_dockq.py" \
         --dataset-dir "$DATASET_DIR" "${RUN_ARGS[@]}" \
-        --subset "$SUBSET" --out "$RESULTS_DIR/dockq.tsv"
+        --subset "$SUBSET" --select-by "$SELECT_BY" \
+        --out-dir "$RESULTS_DIR/dockq" ${RESCORE:+--rescore}
     ;;
 
 link-paper)
@@ -375,25 +624,38 @@ link-paper)
 
 submit-score)
     [[ -d "$PRED_ROOT" ]] || { echo "ERROR: no predictions under $PRED_ROOT" >&2; exit 1; }
-    LOGS="$LOG_ROOT/score"; mkdir -p "$LOGS" "$RESULTS_DIR"
+    LOGS="$LOG_ROOT/score"; mkdir -p "$LOGS" "$RESULTS_DIR/dockq"
+    # ARMS is empty for "every arm on disk"; with --config it is that one arm, so the
+    # job scores it alone and leaves every other arm's table untouched.
+    ARMS=""
+    if [[ -n "$CONFIG" ]]; then
+        require_config
+        ARMS=$(cfg name_tag)
+    fi
     CMD=(sbatch
         --job-name=af3dockq
         --cpus-per-task="$SCORE_CPUS"
         --mem-per-cpu=4g
         --time=8:00:00
         --output="$LOGS/%x_%j.out"
-        --export="ALL,REPO_DIR=$SCRIPT_DIR,DATASET_DIR=$DATASET_DIR,PRED_ROOT=$PRED_ROOT,OUT_TSV=$RESULTS_DIR/dockq.tsv,SUBSET=$SUBSET,SELECT_BY=$SELECT_BY"
+        --export="ALL,REPO_DIR=$SCRIPT_DIR,DATASET_DIR=$DATASET_DIR,PRED_ROOT=$PRED_ROOT,OUT_DIR=$RESULTS_DIR/dockq,SUBSET=$SUBSET,SELECT_BY=$SELECT_BY,ARMS=$ARMS,RESCORE=${RESCORE:-}"
         "$SCRIPT_DIR/slurm/score.sbatch")
     echo "subset    : $SUBSET   select-by: $SELECT_BY   cpus: $SCORE_CPUS"
-    echo "out       : $RESULTS_DIR/dockq.tsv"
+    echo "arms      : ${ARMS:-all arms under $PRED_ROOT}"
+    echo "rescore   : ${RESCORE:-no (entries already ok are carried over)}"
+    echo "tables    : $RESULTS_DIR/dockq/<arm>.tsv"
     submit "${CMD[@]}"
     ;;
 
 plot)
     ARGS=()
-    [[ -f "$RESULTS_DIR/dockq.tsv" ]]     && ARGS+=(--dockq "$RESULTS_DIR/dockq.tsv")
-    [[ -f "$RESULTS_DIR/profiling.tsv" ]] && ARGS+=(--profile "$RESULTS_DIR/profiling.tsv")
-    [[ ${#ARGS[@]} -gt 0 ]] || { echo "ERROR: neither dockq.tsv nor profiling.tsv in $RESULTS_DIR" >&2; exit 1; }
+    # Prefer the per-arm directories; fall back to a single combined table so an
+    # older results/ layout still plots.
+    if [[ -d "$RESULTS_DIR/dockq" ]]; then ARGS+=(--dockq "$RESULTS_DIR/dockq")
+    elif [[ -f "$RESULTS_DIR/dockq.tsv" ]]; then ARGS+=(--dockq "$RESULTS_DIR/dockq.tsv"); fi
+    if [[ -d "$RESULTS_DIR/profiling" ]]; then ARGS+=(--profile "$RESULTS_DIR/profiling")
+    elif [[ -f "$RESULTS_DIR/profiling.tsv" ]]; then ARGS+=(--profile "$RESULTS_DIR/profiling.tsv"); fi
+    [[ ${#ARGS[@]} -gt 0 ]] || { echo "ERROR: no dockq or profiling results in $RESULTS_DIR" >&2; exit 1; }
     "${PY[@]}" "$SCRIPT_DIR/scripts/06_plot_comparison.py" \
         "${ARGS[@]}" --arm-a "$ARM_A" --arm-b "$ARM_B" --out-dir "$FIGURES_DIR"
     ;;
@@ -405,7 +667,7 @@ publish-results)
 
 *)
     echo "Unknown stage: $STAGE" >&2
-    sed -n '4,16p' "${BASH_SOURCE[0]}" >&2
+    awk '/^#   fetch-benchmark/,/^#   publish-results/' "${BASH_SOURCE[0]}" >&2
     exit 1
     ;;
 esac
