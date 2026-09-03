@@ -22,8 +22,33 @@ Sample selection (--select-by), over the --num-diffusion-samples AF3 wrote:
 Both are recorded in the output either way, so the choice can be revisited without
 re-scoring.
 
-Output (--out), one row per (run, entry):
-    run, entry_id, category, n_chains, total_len, chains_match,
+ONE TABLE PER ARM, AND RESUME
+-----------------------------
+Output goes to --out-dir/<label>.tsv, one file per arm, NOT to a single combined
+table. Scoring an arm therefore never rescores the others: adding a fifth arm costs
+that arm's entries, not 5 x 206 DockQ calls. See scripts/result_tables.py.
+
+Within an arm, entries already recorded with status `ok` are carried over from the
+existing table and not re-run; entries that are missing, or whose status was a
+timeout or a missing prediction, ARE retried. --rescore forces everything. So the
+cost of a re-run is the work that is genuinely outstanding.
+
+What is carried over is the MEASUREMENT. The label columns (tag and the pipeline
+axes) are re-derived from the arm's config on every pass, because they describe the
+arm rather than the scoring: renaming an arm's tag, or adding a label column that did
+not exist when the table was written, then costs one cheap pass with zero DockQ calls
+instead of a full rescore.
+
+Nothing writes a merged file: scripts/06 and scripts/08 accept a directory and
+concatenate on the fly, so no stale merge can contradict the per-arm tables.
+
+Output columns, one row per (run, entry):
+    run, engine, weights, use_templates,
+        The arm's axes, read from predictions/<run>/config.json (see
+        scripts/arm_metadata.py). Carried on every row so a DockQ table cannot be
+        read as comparing two arms that in fact differed in their templates — which
+        is exactly the mistake available when the arm names do not say so.
+    entry_id, category, n_chains, total_len, chains_match,
     select_by, sample, ranking_score, iptm, ptm,
     dockq, dockq_min_interface, fnat, irmsd, lrmsd, f1, n_interfaces,
     model_path, status
@@ -41,7 +66,13 @@ Usage:
         --dataset-dir <base>/dataset \
         --run af3_native   <base>/predictions/af3_native \
         --run af3_openbind <base>/predictions/af3_openbind \
-        --out <base>/results/dockq.tsv --jobs 8
+        --out-dir <base>/results/dockq --jobs 8
+
+    # just the one new arm — the others keep their tables untouched
+    pixi run python scripts/05_score_dockq.py \
+        --dataset-dir <base>/dataset \
+        --run of3_openbind_templateoff <base>/predictions/of3_openbind_templateoff \
+        --out-dir <base>/results/dockq --subset all --jobs 32
 """
 
 import os
@@ -58,8 +89,12 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+
+from arm_metadata import ARM_COLUMNS, AXIS_COLUMNS, read_arm
+from result_tables import arm_table_path, load_scored, union_columns, write_rows
 
 # DockQ v2 prints one block per native interface plus a total line.
 #
@@ -110,6 +145,15 @@ def find_samples(entry_dir: Path) -> list[tuple[str, Path, Path]]:
                                                     "_summary_confidences.json")
         samples.append((sub.name, model, summary))
     if not samples:
+        # OpenFold3 layout: seed_<N>/<name>_seed_<N>_sample_<k>_model.cif. Note the
+        # underscores (AF3 hyphenates), the extra directory level, 1-indexed sample
+        # numbers, and confidences in *_confidences_aggregated.json.
+        for sub in sorted(entry_dir.glob("seed_*")):
+            for model in sorted(sub.glob("*_model.cif")):
+                stem = model.name[: -len("_model.cif")]
+                samples.append(
+                    (stem, model, sub / f"{stem}_confidences_aggregated.json"))
+    if not samples:
         # Flat layout (single sample, or an older container): the top-level copy.
         for model in sorted(entry_dir.glob("*_model.cif")):
             stem = model.name[: -len("_model.cif")]
@@ -124,7 +168,11 @@ def sample_scores(summary_path: Path) -> dict:
         data = json.loads(summary_path.read_text())
     except (OSError, json.JSONDecodeError):
         return {}
-    return {k: data.get(k) for k in ("ranking_score", "iptm", "ptm")}
+    scores = {k: data.get(k) for k in ("ranking_score", "iptm", "ptm")}
+    # OpenFold3 calls it sample_ranking_score; iptm and ptm carry the same names.
+    if scores["ranking_score"] is None:
+        scores["ranking_score"] = data.get("sample_ranking_score")
+    return scores
 
 
 def pick_sample(samples: list[tuple[str, Path, Path]], select_by: str):
@@ -140,47 +188,100 @@ def pick_sample(samples: list[tuple[str, Path, Path]], select_by: str):
     return name, model, scores
 
 
+def cif_with_occupancy(cif_text: str) -> str | None:
+    """Add an `_atom_site.occupancy` column (all 1.00) if the mmCIF lacks one.
+
+    OpenFold3's model.cif omits occupancy, which DockQ's Biopython MMCIFParser
+    requires unconditionally (`mmcif_dict["_atom_site.occupancy"]`), so every OF3
+    model otherwise dies with KeyError: '_atom_site.occupancy'. mmCIF loop columns
+    are positional, so appending the tag after the last _atom_site.* header and one
+    value per ATOM/HETATM row keeps them aligned.
+
+    Returns None when nothing needs doing, so AF3 models are scored from their
+    original file and this cannot perturb them. Ported from
+    ~/src/pooled_ppi_comparison/benchmarks/zheng_dockq/04_analyze_dockq.py, where
+    it was verified to reproduce scores on models the plain path already handled.
+    """
+    lines = cif_text.splitlines()
+    if any(line.strip() == "_atom_site.occupancy" for line in lines):
+        return None
+    tag_idx = [i for i, line in enumerate(lines)
+               if line.lstrip().startswith("_atom_site.")]
+    if not tag_idx:
+        return None
+    last = tag_idx[-1]
+    out = []
+    for i, line in enumerate(lines):
+        out.append(line)
+        if i == last:
+            out.append("_atom_site.occupancy")
+    return "\n".join(
+        (line.rstrip() + " 1.00") if line.lstrip().startswith(("ATOM ", "HETATM "))
+        else line
+        for line in out
+    ) + "\n"
+
+
 def run_dockq(dockq_cmd: list[str], model: Path, native: Path,
               timeout: int) -> tuple[dict, str]:
+    # OF3 models need an injected occupancy column; the patched copy is written
+    # beside nothing permanent, and AF3 models skip this entirely.
+    tmp_model = None
     try:
-        proc = subprocess.run(dockq_cmd + [str(model), str(native)],
-                              capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return {}, f"dockq_timeout_{timeout}s"
-    if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout).strip().splitlines()
-        tail = detail[-1][:160] if detail else "no output"
-        return {}, f"dockq_failed:{tail}"
+        patched = cif_with_occupancy(model.read_text())
+    except OSError:
+        patched = None
+    if patched is not None:
+        tmp = tempfile.NamedTemporaryFile("w", suffix=".cif", delete=False)
+        tmp.write(patched)
+        tmp.close()
+        tmp_model = Path(tmp.name)
+        model = tmp_model
 
-    out = proc.stdout
-    result: dict = {}
-    total = TOTAL_RE.search(out)
-    if total:
-        result["n_interfaces"] = int(total.group(1))
-        result["dockq"] = float(total.group(2))
+    try:
+        try:
+            proc = subprocess.run(dockq_cmd + [str(model), str(native)],
+                                  capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return {}, f"dockq_timeout_{timeout}s"
+        if proc.returncode != 0:
+            detail = (proc.stderr or proc.stdout).strip().splitlines()
+            tail = detail[-1][:160] if detail else "no output"
+            return {}, f"dockq_failed:{tail}"
 
-    per_interface = [float(v) for v in PER_INTERFACE_DOCKQ_RE.findall(out)]
-    for key, pattern in METRIC_RES.items():
-        values = [float(v) for v in pattern.findall(out)]
-        if values:
-            result[key] = sum(values) / len(values)
+        out = proc.stdout
+        result: dict = {}
+        total = TOTAL_RE.search(out)
+        if total:
+            result["n_interfaces"] = int(total.group(1))
+            result["dockq"] = float(total.group(2))
 
-    if "dockq" not in result:
-        # Single-interface runs of some versions omit the total line; fall back to
-        # the one per-interface block rather than dropping the entry.
-        if len(per_interface) == 1:
-            result["dockq"] = per_interface[0]
-            result["n_interfaces"] = 1
-        else:
-            return {}, "dockq_unparsed"
-    result["dockq_min_interface"] = min(per_interface) if per_interface else ""
-    return result, "ok"
+        per_interface = [float(v) for v in PER_INTERFACE_DOCKQ_RE.findall(out)]
+        for key, pattern in METRIC_RES.items():
+            values = [float(v) for v in pattern.findall(out)]
+            if values:
+                result[key] = sum(values) / len(values)
+
+        if "dockq" not in result:
+            # Single-interface runs of some versions omit the total line; fall back
+            # to the one per-interface block rather than dropping the entry.
+            if len(per_interface) == 1:
+                result["dockq"] = per_interface[0]
+                result["n_interfaces"] = 1
+            else:
+                return {}, "dockq_unparsed"
+        result["dockq_min_interface"] = min(per_interface) if per_interface else ""
+        return result, "ok"
+    finally:
+        if tmp_model is not None:
+            tmp_model.unlink(missing_ok=True)
 
 
 def score_one(task: dict) -> dict:
     entry = task["entry"]
     row = {
         "run": task["run"],
+        **{key: task["arm"][key] for key in ARM_COLUMNS},
         "entry_id": entry["entry_id"],
         "category": entry["category"],
         "n_chains": entry["n_chains"],
@@ -232,7 +333,13 @@ def main() -> int:
     ap.add_argument("--dataset-dir", required=True, type=Path)
     ap.add_argument("--run", nargs=2, action="append", metavar=("LABEL", "DIR"),
                     required=True)
-    ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--out-dir", required=True, type=Path,
+                    help="Directory for the per-arm tables, <out-dir>/<label>.tsv. "
+                         "One file per arm, so scoring one never rescores the rest.")
+    ap.add_argument("--rescore", action="store_true",
+                    help="Re-run DockQ for entries already recorded ok. Without it, "
+                         "those are carried over from the arm's existing table and "
+                         "only missing or failed entries are scored.")
     ap.add_argument("--select-by", choices=["best", "maxiptm"], default="best")
     ap.add_argument("--subset", choices=["dimers", "all"], default="dimers")
     ap.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 1))
@@ -253,38 +360,76 @@ def main() -> int:
     if args.subset == "dimers":
         entries = [e for e in entries if int(e["n_chains"]) == 2]
 
-    tasks = [{"run": label, "run_dir": run_dir, "entry": entry,
-              "select_by": args.select_by, "dockq_cmd": dockq_cmd,
-              "timeout": args.timeout}
-             for label, run_dir in args.run for entry in entries]
-    print(f"Scoring {len(entries)} entries x {len(args.run)} run(s) "
-          f"= {len(tasks)} DockQ calls, --jobs {args.jobs}, --select-by {args.select_by}")
-
-    rows: list[dict] = []
-    with ProcessPoolExecutor(max_workers=args.jobs) as pool:
-        futures = {pool.submit(score_one, t): t for t in tasks}
-        for n, future in enumerate(as_completed(futures), 1):
-            rows.append(future.result())
-            if n % 25 == 0 or n == len(tasks):
-                print(f"  {n}/{len(tasks)}", file=sys.stderr)
-
-    rows.sort(key=lambda r: (r["run"], r["entry_id"]))
-    columns = ["run", "entry_id", "category", "n_chains", "total_len", "chains_match",
+    arms = {label: read_arm(Path(run_dir)) for label, run_dir in args.run}
+    columns = ["run", *ARM_COLUMNS,
+               "entry_id", "category", "n_chains", "total_len", "chains_match",
                "select_by", "sample", "ranking_score", "iptm", "ptm",
                "dockq", "dockq_min_interface",
                "fnat", "irmsd", "lrmsd", "f1", "n_interfaces",
                "model_path", "status"]
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.out, "w") as fh:
-        fh.write("\t".join(columns) + "\n")
-        for row in rows:
-            fh.write("\t".join(str(row.get(c, "")) for c in columns) + "\n")
-    print(f"\nWrote {len(rows)} rows to {args.out}")
+
+    # Work out what is actually outstanding BEFORE spending anything, per arm, so the
+    # printed plan is the real cost rather than the worst case.
+    carried: dict[str, dict[str, dict]] = {}
+    tasks = []
+    for label, run_dir in args.run:
+        done = {} if args.rescore else load_scored(args.out_dir, label)
+        # Carry the MEASUREMENTS but re-derive the LABELS. tag/engine/weights/
+        # use_templates describe the arm, not the scoring, so a config whose tag or
+        # recorded axes changed should be reflected without re-running DockQ — and a
+        # table written before a label column existed gets it backfilled for free.
+        for row in done.values():
+            row["run"] = label
+            row.update({key: arms[label][key] for key in ARM_COLUMNS})
+        carried[label] = done
+        for entry in entries:
+            if entry["entry_id"] in done:
+                continue
+            tasks.append({"run": label, "run_dir": run_dir, "entry": entry,
+                          "arm": arms[label], "select_by": args.select_by,
+                          "dockq_cmd": dockq_cmd, "timeout": args.timeout})
+
+    total_possible = len(entries) * len(args.run)
+    print(f"{len(entries)} entries x {len(args.run)} arm(s) = {total_possible} pairs; "
+          f"{len(tasks)} need DockQ, {total_possible - len(tasks)} carried over"
+          f"{' (--rescore: nothing carried over)' if args.rescore else ''}")
+    print(f"--jobs {args.jobs}, --select-by {args.select_by}, tables -> {args.out_dir}")
+    for label, arm in arms.items():
+        axes = " ".join(f"{k}={arm[k] or '?'}" for k in AXIS_COLUMNS)
+        todo = sum(1 for t in tasks if t["run"] == label)
+        print(f"  {label:28s} {axes}   to score: {todo}, carried: {len(carried[label])}")
+        if not arm["engine"]:
+            print(f"  {'':28s} NOTE: no config.json in this run directory, so its "
+                  f"pipeline axes are unknown and left blank in the output.")
+
+    fresh: list[dict] = []
+    if tasks:
+        with ProcessPoolExecutor(max_workers=args.jobs) as pool:
+            futures = {pool.submit(score_one, t): t for t in tasks}
+            for n, future in enumerate(as_completed(futures), 1):
+                fresh.append(future.result())
+                if n % 25 == 0 or n == len(tasks):
+                    print(f"  {n}/{len(tasks)}", file=sys.stderr)
+
+    # One table per arm: carried-over rows plus whatever was just scored.
+    by_arm: dict[str, list[dict]] = {label: list(carried[label].values())
+                                     for label, _ in args.run}
+    for row in fresh:
+        by_arm[row["run"]].append(row)
+
+    print()
+    for label, _ in args.run:
+        rows = sorted(by_arm[label], key=lambda r: r["entry_id"])
+        path = arm_table_path(args.out_dir, label)
+        write_rows(path, union_columns(rows, columns), rows)
+        n_new = sum(1 for r in fresh if r["run"] == label)
+        print(f"Wrote {len(rows)} rows to {path}  ({n_new} newly scored)")
 
     for label, _ in args.run:
-        subset = [r for r in rows if r["run"] == label]
+        subset = by_arm[label]
         scored = sorted(float(r["dockq"]) for r in subset if r["dockq"])
-        print(f"\n{label}: {len(subset)} entries, {len(scored)} scored")
+        axes = " ".join(f"{k}={arms[label][k] or '?'}" for k in AXIS_COLUMNS)
+        print(f"\n{label}: {len(subset)} entries, {len(scored)} scored   [{axes}]")
         if scored:
             median = scored[len(scored) // 2]
             acceptable = sum(1 for d in scored if d >= 0.23)   # DockQ's own thresholds
