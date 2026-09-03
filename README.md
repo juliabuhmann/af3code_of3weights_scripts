@@ -1,5 +1,17 @@
 # Running OpenFold3 weights with the AlphaFold 3 codebase
 
+## In a nutshell
+This repository runs OpenFold3's weights with the AlphaFold 3 codebase. The weights
+are the same either way, so this should in principle give OpenFold3-level accuracy
+with the AlphaFold 3 implementation's efficiency — on one RTX Pro 6000 that means
+complexes of up to 5500 residues rather than 3500, on less than half the memory at
+3500 residues and at roughly twice the speed there. The accuracy held on the one
+limited benchmark tried here, but broader tests are needed
+([Limitations](#limitations)). Since AlphaFold 3's code and OpenFold3's weights are
+both Apache 2.0, this setup is open end to end — with no
+access request for restricted weights.
+
+## Overview
 Accompanying scripts for benchmarking the AlphaFold 3 codebase driven with
 **OpenFold3 weights** instead of DeepMind's.
 
@@ -30,10 +42,12 @@ only to the reference arm.
 
 ## Why not just run OpenFold3?
 
+
+
 The OpenFold3 weights work with the OpenFold3 codebase too (obviously), but AlphaFold 3's
 implementation is less GPU-memory hungry and so fits larger complexes on the same
-card: tested in-house on an RTX Pro 6000 (90 GB), OpenFold3 topped out at around
-3500 residues while the AlphaFold 3 codebase reached ~5000 on the same hardware, and
+card: tested in-house on an RTX Pro 6000 (96 GB), OpenFold3 topped out at 3500
+residues while the AlphaFold 3 codebase reached 5500 on the same hardware, and
 it is the faster of the two from ~1500 residues up (see
 [Runtime and memory](#runtime-and-memory)).
 
@@ -69,7 +83,11 @@ Each codebase was walked up a 500-to-7000-token grid in 500-token steps on one R
 6000, over pools of *n* copies of one real 250-aa chain with its own MSAs; the curves
 end at the largest pool that ran. Memory is the framework's own live-buffer peak (JAX
 `peak_bytes_in_use`, PyTorch `max_memory_allocated`), not `nvidia-smi`, which cannot
-see inside AlphaFold 3's preallocated XLA arena. Model time is each engine's own timer
+see inside AlphaFold 3's preallocated XLA arena. That arena is the AlphaFold 3
+ceiling, and the sweep sizes it with `XLA_CLIENT_MEM_FRACTION=0.95` (~91 GiB) as the
+weight-porting runs do, so 5500 residues is the number for that setting; at JAX's
+default fraction of 0.75 (~72 GiB), which is what [`slurm/predict.sbatch`](slurm/)
+leaves in place, the largest pool that fits is 5000. Model time is each engine's own timer
 (AlphaFold 3's log, OpenFold3's `timing.json`), excluding startup and parameter
 loading; details in [`profiling/`](profiling/).
 
@@ -98,7 +116,13 @@ default settings, as in the paper. Each point is one complex:
 Per-complex values, per-interface metrics and inference times are in
 [`results/dockq.tsv`](results/) and [`results/profiling.tsv`](results/).
 
+### How do AlphaFold 3's own weights compare to openbind?
 
+This is the licensing question — what the substitution actually costs — and
+**Benchmark-IV is not suited to answering it.** The set is held out for AlphaFold 3
+but every target predates openbind's June 2025 cutoff, so openbind was in all
+likelihood trained on these structures; a comparison here flatters openbind, and a
+real answer needs an analysis on a benchmark released after that cutoff.
 
 ### Limitations
 
