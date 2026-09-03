@@ -1,6 +1,11 @@
 {
   "name_tag": "af3_openbind",
   "label": "AF3 code + OpenFold3 openbind weights",
+  "tag": "AF3 code / openbind",
+
+  "engine": "af3",
+  "weights": "openbind",
+  "use_templates": true,
 
   "image": "/cluster/project/beltrao/shared/alphafold3/images/alphafold3_openbind_1fff5c4_weights.sif",
   "model_dir": "/models",
@@ -28,6 +33,10 @@
     "be bind-mounted for the weights, which is why the image is 5.4 G rather than 4 G.",
     "",
     "Everything else — recycles, diffusion samples, seed, MSAs, templates, GPU — is",
-    "shared with the native arm."
+    "shared with the native arm.",
+    "",
+    "use_templates=true. The templates-off counterpart is",
+    "af3_openbind_templateoff.json, which is the arm matched to of3_openbind_templateoff",
+    "(OF3 gets no templates at all, see scripts/09_build_of3_inputs.py)."
   ]
 }
