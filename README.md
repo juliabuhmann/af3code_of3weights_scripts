@@ -2,15 +2,16 @@
 
 ## In a nutshell
 
-This repository runs OpenFold3's weights with the AlphaFold 3 codebase. The weights
-are the same either way, so this should in principle give OpenFold3-level accuracy
-with the AlphaFold 3 implementation's efficiency — on one RTX Pro 6000 that means
-complexes of up to 5500 residues rather than 3500, on less than half the memory at
-3500 residues and at roughly twice the speed there. Against OpenFold3's own codebase
-that held on the one limited benchmark tried here, but broader tests are needed
-([Limitations](#limitations)). Since AlphaFold 3's code and OpenFold3's weights are
-both Apache 2.0, this setup is open end to end — with no
-access request for restricted weights.
+This runs OpenFold3's weights with the AlphaFold 3 codebase. The weights are the same
+either way, so accuracy should match OpenFold3's own codebase. It did on the one
+benchmark tested here; broader tests are needed ([Limitations](#limitations)). On one
+RTX Pro 6000 the AlphaFold 3 code fits 5500 residues instead of 3500, and at 3500 it
+uses less than half the memory and runs about twice as fast. Both the code and the
+weights are Apache 2.0, so no access request is needed.
+
+This repository is only the evaluation scripts. The weight port itself lives in
+[juliabuhmann/alphafold3](https://github.com/juliabuhmann/alphafold3), branch
+`add_openbind_porter`.
 
 ## Overview
 
@@ -126,11 +127,18 @@ the two above, plus the templates-on pair on either weight set (`af3_openbind`,
 
 ### How do AlphaFold 3's own weights compare to openbind?
 
-This is the licensing question — what the substitution actually costs — and
-**Benchmark-IV is not suited to answering it.** The set is held out for AlphaFold 3
-but every target predates openbind's June 2025 cutoff, so openbind was in all
-likelihood trained on these structures; a comparison here flatters openbind, and a
-real answer needs an analysis on a benchmark released after that cutoff.
+To the extent that this pipeline and OpenFold3's own codebase produce the same
+structures from the same weights — which the comparison above supports on average —
+every benchmark published on the openbind weights carries over to this setup, and
+those are the numbers to read for what these weights can do: the
+[OpenFold3 preprint](https://www.biorxiv.org/content/10.64898/2026.08.27.747600v1.full.pdf)
+on openbind's precursor, and the more extensively evaluated preview-2 release in its
+[technical report](https://portal.openfold.io/reports/of3p2_technical_report.pdf).
+
+Empirically, what this repository cannot tell you is what the substitution costs
+against AlphaFold 3's own weights: Benchmark-IV is held out for AlphaFold 3, but every
+target predates openbind's June 2025 cutoff, so a comparison here flatters openbind.
+That needs an analysis on a  benchmark released after the cutoff.
 
 ### Limitations
 
