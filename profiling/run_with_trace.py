@@ -133,6 +133,22 @@ def parse_model_time(engine: str, log_path: str, timing_glob: str) -> float | No
                  + (float(infer.group(1)) if infer else 0.0), 3)
 
 
+KIT_PEAK_RE = re.compile(r"PEAK-NOTE scope=pass status=ok peak_alloc_gib=([\d.]+)(?: kind=(\S+))?")
+
+
+def parse_kit_peak(log_path: str) -> dict:
+    """peak_alloc_mib from the af3_jax kit's PEAK-NOTE line (GiB -> MiB), or {} when absent."""
+    try:
+        with open(log_path, errors="replace") as fh:
+            text = fh.read()
+    except FileNotFoundError:
+        return {}
+    m = KIT_PEAK_RE.search(text)
+    if m is None:
+        return {}
+    return {"peak_alloc_mib": round(float(m.group(1)) * 1024, 1), "peak_alloc_source": "kit PEAK-NOTE"}
+
+
 def classify(log_path: str, exit_code: int, summary_path: str) -> str:
     text = ""
     try:
@@ -212,6 +228,11 @@ def main() -> int:
             peak_mem = json.load(open(args.peak_mem_json))
         except (OSError, json.JSONDecodeError):
             peak_mem = {}
+    if peak_mem.get("peak_alloc_mib") is None:
+        # Anthropic's af3_jax kit runs the model in a child process peak_mem.py cannot wrap, and
+        # prints the same counter itself (jax peak_bytes_in_use, its own sitecustomize hook):
+        #   [af3-jax-opt] PEAK-NOTE scope=pass status=ok peak_alloc_gib=3.97 kind=jax_peak_bytes_in_use ...
+        peak_mem = {**peak_mem, **parse_kit_peak(infer_log)}
     results = {
         "status": status,
         "peak_alloc_mib": peak_mem.get("peak_alloc_mib"),

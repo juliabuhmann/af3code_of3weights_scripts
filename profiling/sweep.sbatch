@@ -53,7 +53,8 @@
 #   NUM_DIFFUSION_SAMPLES NUM_RECYCLES TIME_BUDGET_S PER_SIZE_RESERVE_S MAX_TOKENS
 #   MEM_FRACTION (af3, default 0.95)
 #   WARMUP_RUNS (default 0: untimed runs of each size before the recorded one)
-#   af3: IMAGE MODEL_DIR OF3_WEIGHTS
+#   af3: MODEL_DIR OF3_WEIGHTS + IMAGE (production image) OR KIT_KIND KIT_DIR KIT_ENV KIT_REPO KIT_CONFIG
+#        KIT_MODE KIT_VARIANT KIT_LEVERS_OFF KIT_ENV_VARS (Anthropic's af3_jax kit; configs/af3kit_*.json)
 #   of3: CKPT RUNNER_YAML, then EITHER OF3_SRC OF3_ENV (a source checkout in its own env)
 #        OR KIT_KIND KIT_DIR KIT_ENV KIT_CONFIG KIT_MODE KIT_LEVERS_OFF KIT_CUDA_HOME KIT_LD
 #        (Anthropic's openfold3_ob0 kit; configs/of3kit_*.json, profiling/setup_kit_env.sh)
@@ -98,7 +99,6 @@ DRIVER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null
 
 case "$ENGINE" in
 af3)
-    : "${IMAGE:?IMAGE must be set for engine af3}"
     : "${MODEL_DIR:?MODEL_DIR must be set for engine af3}"
     OF3_WEIGHTS="${OF3_WEIGHTS:-0}"
     POOL_DIR="$INPUT_DIR/af3_pool"
@@ -112,6 +112,26 @@ af3)
     STRIPPER="$REPO_DIR/slurm/strip_templates.py"
     [[ -f "$STRIPPER" ]] || { echo "ERROR: no such file: $STRIPPER" >&2; exit 1; }
     cp "$REPO_DIR/profiling/peak_mem.py" "$SCRATCH/peak_mem.py"
+    if [[ -n "${KIT_KIND:-}" ]]; then
+        # Anthropic's af3_jax kit (configs/af3kit_*.json, profiling/setup_af3kit_env.sh). The kit's
+        # `-m` route activates from its source trees on PYTHONPATH; no install. AF3_JAX_REPO must be
+        # WRITABLE (a kit mode copies run_alphafold_fast.py beside run_alphafold.py), so the repo
+        # copy is staged into scratch per job. The kit fills the three XLA variables only where
+        # unset and keeps a caller's value, so the arena settings above stay in force.
+        : "${KIT_DIR:?}" "${KIT_ENV:?}" "${KIT_REPO:?}" "${KIT_MODE:?}"
+        export PATH="$KIT_ENV/bin:$PATH"
+        export PYTHONPATH="$KIT_DIR/opt:$KIT_DIR/../common/opt_core${PYTHONPATH:+:$PYTHONPATH}"
+        export MODEL_OPT="$KIT_DIR" AF3_JAX_PY="$KIT_ENV/bin/python" PYTHONHASHSEED=0
+        export AF3_JAX_REPO="$SCRATCH/af3_repo"; mkdir -p "$AF3_JAX_REPO"; cp "$KIT_REPO"/*.py "$AF3_JAX_REPO/"
+        export AF3_JAX_CACHE_ROOT="$SCRATCH/af3_jax_cache"; mkdir -p "$AF3_JAX_CACHE_ROOT"
+        if [[ -n "${KIT_ENV_VARS:-}" ]]; then IFS=';' read -ra _kv <<< "$KIT_ENV_VARS"; for kv in "${_kv[@]}"; do export "$kv"; done; fi
+        source "$KIT_DIR/configs/${KIT_CONFIG:-a100}.env"
+        [[ -n "${KIT_LEVERS_OFF:-}" && "$KIT_MODE" != "off" ]] && export MODEL_OPT_LEVERS_OFF="$KIT_LEVERS_OFF"
+        python -m af3_jax_opt check --mode "$KIT_MODE" --variant "${KIT_VARIANT:-p2}" --model_dir "$MODEL_DIR" \
+            | grep -E "DRY-RUN|WEIGHTS|NOT ACTIVE" | cut -c1-200 || { echo "ERROR: the kit refuses mode $KIT_MODE here (above)" >&2; exit 1; }
+    else
+        : "${IMAGE:?IMAGE must be set for engine af3 without a kit launcher}"
+    fi
     ;;
 of3)
     : "${CKPT:?CKPT must be set for engine of3}"
@@ -208,6 +228,19 @@ run_size() {
             fi
             echo "templates   : stripped ($counts)"
         fi
+        if [[ -n "${KIT_KIND:-}" ]]; then
+            # The kit's entry point. The model runs in a child process peak_mem.py cannot wrap;
+            # run_with_trace.py reads the kit's PEAK-NOTE line instead (same JAX counter).
+            # --cache_dir is passed to every mode, off included (see the config's notes).
+            cmd=(python -m af3_jax_opt pred --mode "$KIT_MODE" --variant "${KIT_VARIANT:-p2}" --model_dir "$MODEL_DIR"
+                 --json_path="$input_used"
+                 --output_dir="$SCRATCH/out"
+                 --cache_dir="$SCRATCH/alphafold_cache"
+                 --force_output_dir
+                 --num_recycles="$NUM_RECYCLES"
+                 --num_diffusion_samples="$NUM_DIFFUSION_SAMPLES"
+                 --norun_data_pipeline)
+        else
         cmd=(singularity exec --nv
              --bind "$INPUT_DIR:$INPUT_DIR"
              --bind "$SCRATCH:$SCRATCH"
@@ -229,6 +262,7 @@ run_size() {
                  --num_diffusion_samples="$NUM_DIFFUSION_SAMPLES"
                  --norun_data_pipeline
                  "${OF3_FLAG[@]}")
+        fi
     else
         local query="$POOL_DIR/$name/query.json"
         [[ -f "$query" ]] || { echo "ERROR: no such query: $query" >&2; return 1; }

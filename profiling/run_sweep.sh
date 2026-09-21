@@ -151,10 +151,34 @@ af3)
     IMAGE="${AF3OF3_IMAGE:-$(cfg image)}"
     MODEL_DIR=$(expand_home "$(cfg model_dir)")
     OF3=$(cfg of3_weights); [[ "$OF3" == "true" ]] && OF3=1 || OF3=0
-    VARS+=("IMAGE=$IMAGE" "MODEL_DIR=$MODEL_DIR" "OF3_WEIGHTS=$OF3")
-    echo "image         : $IMAGE"
+    VARS+=("MODEL_DIR=$MODEL_DIR" "OF3_WEIGHTS=$OF3")
     echo "model_dir     : $MODEL_DIR   of3_weights=$OF3"
     echo "xla arena     : preallocate=true  mem_fraction=$MEM_FRACTION"
+    # Two launchers for the one engine. Without a `launcher` block the arm is the production image
+    # (singularity exec ... run_alphafold.py). With launcher.kind "af3_jax_kit" it is Anthropic's
+    # af3_jax optimization kit: its venv, its per-card file, `python -m af3_jax_opt pred --mode M`.
+    # Same engine, same af3_pool inputs, same log timers; see configs/af3kit_*.json and
+    # profiling/setup_af3kit_env.sh.
+    KIT_KIND=$(cfg launcher.kind)
+    if [[ -n "$KIT_KIND" ]]; then
+        [[ "$KIT_KIND" == "af3_jax_kit" ]] || { echo "ERROR: unknown launcher.kind '$KIT_KIND' for engine af3 in $CONFIG" >&2; exit 1; }
+        KIT_DIR="${AF3OF3_KIT_DIR:-$(cfg launcher.kit_dir)}"
+        KIT_ENV="${AF3OF3_KIT_ENV:-$(cfg launcher.kit_env)}"
+        KIT_REPO="${AF3OF3_KIT_REPO:-$(cfg launcher.kit_repo)}"
+        KIT_CONFIG=$(cfg launcher.kit_config); KIT_MODE=$(cfg launcher.mode); KIT_VARIANT=$(cfg launcher.variant); KIT_LEVERS_OFF=$(cfg launcher.levers_off)
+        KIT_ENV_VARS=$(python3 -c "import json,sys; e=json.load(open(sys.argv[1])).get('launcher',{}).get('env',{}); print(';'.join(f'{k}={v}' for k,v in e.items()))" "$CONFIG")
+        [[ -n "$KIT_MODE" ]] || { echo "ERROR: launcher.mode missing in $CONFIG" >&2; exit 1; }
+        [[ -d "$KIT_DIR" && -x "$KIT_ENV/bin/python" && -f "$KIT_REPO/run_alphafold.py" ]] || { echo "ERROR: kit dir, venv or repo copy missing ($KIT_DIR, $KIT_ENV, $KIT_REPO) -- profiling/setup_af3kit_env.sh" >&2; exit 1; }
+        [[ -f "$MODEL_DIR/of3_ported_weights.bin.zst" ]] || { echo "ERROR: no converted weights at $MODEL_DIR -- profiling/setup_af3kit_env.sh step 5" >&2; exit 1; }
+        VARS+=("KIT_KIND=$KIT_KIND" "KIT_DIR=$KIT_DIR" "KIT_ENV=$KIT_ENV" "KIT_REPO=$KIT_REPO" "KIT_CONFIG=${KIT_CONFIG:-a100}"
+               "KIT_MODE=$KIT_MODE" "KIT_VARIANT=${KIT_VARIANT:-p2}" "KIT_LEVERS_OFF=$KIT_LEVERS_OFF" "KIT_ENV_VARS=$KIT_ENV_VARS")
+        echo "launcher      : $KIT_KIND  mode=$KIT_MODE  variant=${KIT_VARIANT:-p2}  levers_off=${KIT_LEVERS_OFF:-none}  card file=${KIT_CONFIG:-a100}.env"
+        echo "kit dir       : $KIT_DIR  ($(cfg launcher.kit_commit))"
+        echo "kit env       : $KIT_ENV"
+    else
+        VARS+=("IMAGE=$IMAGE")
+        echo "image         : $IMAGE"
+    fi
     ;;
 of3)
     if [[ "$USE_TEMPLATES" == "1" ]]; then
@@ -212,7 +236,8 @@ if [[ "$LOCAL" -eq 1 ]]; then
     exit $?
 fi
 
-CMD=(sbatch
+PART=$(cfg slurm.partition); PART_ARG=(); [[ -n "$PART" ]] && PART_ARG=(--partition="$PART")
+CMD=(sbatch "${PART_ARG[@]}"
     --job-name="vram_$ARM"
     --gpus="$GPU"
     --gres="gpumem:$GPUMEM"
