@@ -100,6 +100,9 @@ WEIGHTS=$(cfg weights)
 USE_TEMPLATES=$(cfg use_templates); [[ "$USE_TEMPLATES" == "true" ]] && USE_TEMPLATES=1 || USE_TEMPLATES=0
 SAMPLES=$(cfg num_diffusion_samples)
 RECYCLES=$(cfg num_recycles)
+# warmup_runs (optional, default 0): untimed runs of each size before the recorded one, for arms
+# whose kernels compile or autotune per tensor shape inside the timed loop (the of3kit_* arms).
+WARMUP_RUNS=$(cfg warmup_runs); WARMUP_RUNS=${WARMUP_RUNS:-0}
 GPU=$(cfg slurm.gpu)
 GPUMEM=$(cfg slurm.gpumem)
 CPUS=$(cfg slurm.cpus)
@@ -114,7 +117,7 @@ mkdir -p "$OUT_DIR" "$LOGS"
 cp "$CONFIG" "$OUT_DIR/config.json"
 
 echo "arm           : $ARM  ($(cfg label))"
-echo "engine        : $ENGINE   weights: $WEIGHTS   use_templates: $(cfg use_templates)"
+echo "engine        : $ENGINE   weights: $WEIGHTS   use_templates: $(cfg use_templates)   warmup_runs: $WARMUP_RUNS"
 echo "base dir      : $BASE_DIR"
 echo "inputs        : $INPUT_DIR"
 echo "out dir       : $OUT_DIR"
@@ -137,7 +140,7 @@ fi
 # ── Engine-specific environment, resolved exactly as run_workflow.sh resolves it ──
 # One KEY=VALUE per element: joined with commas for sbatch --export, passed as-is to
 # `env` under --local, so the two paths cannot drift.
-VARS=("ARM=$ARM" "ENGINE=$ENGINE" "WEIGHTS=$WEIGHTS" "USE_TEMPLATES=$USE_TEMPLATES"
+VARS=("ARM=$ARM" "ENGINE=$ENGINE" "WEIGHTS=$WEIGHTS" "USE_TEMPLATES=$USE_TEMPLATES" "WARMUP_RUNS=$WARMUP_RUNS"
       "INPUT_DIR=$INPUT_DIR" "OUT_DIR=$OUT_DIR" "REPO_DIR=$SCRIPT_DIR"
       "NUM_DIFFUSION_SAMPLES=$SAMPLES" "NUM_RECYCLES=$RECYCLES"
       "TIME_BUDGET_S=$(hms_to_s "$TIME")" "MAX_TOKENS=$MAX_TOKENS"
@@ -160,15 +163,38 @@ of3)
         echo "       See scripts/09_build_of3_inputs.py." >&2
         exit 1
     fi
-    OF3_SRC="${AF3OF3_OF3_SRC:-$(cfg of3_src)}"
-    OF3_ENV="${AF3OF3_OF3_ENV:-$(cfg of3_env)}"
     CKPT=$(expand_home "${AF3OF3_OF3_CKPT:-$(cfg ckpt)}")
     RUNNER_YAML=$(cfg runner_yaml)
     [[ "$RUNNER_YAML" == /* ]] || RUNNER_YAML="$SCRIPT_DIR/$RUNNER_YAML"
-    VARS+=("OF3_SRC=$OF3_SRC" "OF3_ENV=$OF3_ENV" "CKPT=$CKPT" "RUNNER_YAML=$RUNNER_YAML")
-    echo "of3_src       : $OF3_SRC"
+    VARS+=("CKPT=$CKPT" "RUNNER_YAML=$RUNNER_YAML")
     echo "ckpt          : $CKPT"
     echo "runner yaml   : $RUNNER_YAML"
+    # Two launchers for the one engine. Without a `launcher` block the arm is OpenFold3 from a
+    # source checkout (of3_src) in its own environment (of3_env). With launcher.kind
+    # "openfold3_ob0_kit" it is Anthropic's optimization kit: the kit's venv, its per-card
+    # environment file, its `pred --mode` entry point (or upstream's for mode off). Same
+    # engine, same queries, same counters; see configs/of3kit_*.json and setup_kit_env.sh.
+    KIT_KIND=$(cfg launcher.kind)
+    if [[ -n "$KIT_KIND" ]]; then
+        [[ "$KIT_KIND" == "openfold3_ob0_kit" ]] || { echo "ERROR: unknown launcher.kind '$KIT_KIND' in $CONFIG" >&2; exit 1; }
+        KIT_DIR="${AF3OF3_KIT_DIR:-$(cfg launcher.kit_dir)}"
+        KIT_ENV="${AF3OF3_KIT_ENV:-$(cfg launcher.kit_env)}"
+        KIT_CUDA_HOME="${AF3OF3_KIT_CUDA_HOME:-$(cfg launcher.cuda_home)}"
+        KIT_LD="${AF3OF3_KIT_LD:-$(cfg launcher.ld_library_path)}"
+        KIT_CONFIG=$(cfg launcher.kit_config); KIT_MODE=$(cfg launcher.mode); KIT_LEVERS_OFF=$(cfg launcher.levers_off)
+        [[ -n "$KIT_MODE" ]] || { echo "ERROR: launcher.mode missing in $CONFIG" >&2; exit 1; }
+        [[ -d "$KIT_DIR" && -x "$KIT_ENV/bin/python" ]] || { echo "ERROR: kit dir or venv missing ($KIT_DIR, $KIT_ENV) -- profiling/setup_kit_env.sh" >&2; exit 1; }
+        VARS+=("KIT_KIND=$KIT_KIND" "KIT_DIR=$KIT_DIR" "KIT_ENV=$KIT_ENV" "KIT_CONFIG=${KIT_CONFIG:-h100}" "KIT_MODE=$KIT_MODE"
+               "KIT_LEVERS_OFF=$KIT_LEVERS_OFF" "KIT_CUDA_HOME=$KIT_CUDA_HOME" "KIT_LD=$KIT_LD")
+        echo "launcher      : $KIT_KIND  mode=$KIT_MODE  levers_off=${KIT_LEVERS_OFF:-none}  card file=${KIT_CONFIG:-h100}.env"
+        echo "kit dir       : $KIT_DIR  ($(cfg launcher.kit_commit))"
+        echo "kit env       : $KIT_ENV"
+    else
+        OF3_SRC="${AF3OF3_OF3_SRC:-$(cfg of3_src)}"
+        OF3_ENV="${AF3OF3_OF3_ENV:-$(cfg of3_env)}"
+        VARS+=("OF3_SRC=$OF3_SRC" "OF3_ENV=$OF3_ENV")
+        echo "of3_src       : $OF3_SRC"
+    fi
     ;;
 *)
     echo "ERROR: unknown engine '$ENGINE' in $CONFIG (expected af3 or of3)" >&2; exit 1 ;;

@@ -52,8 +52,11 @@
 #   ARM ENGINE WEIGHTS USE_TEMPLATES INPUT_DIR OUT_DIR REPO_DIR
 #   NUM_DIFFUSION_SAMPLES NUM_RECYCLES TIME_BUDGET_S PER_SIZE_RESERVE_S MAX_TOKENS
 #   MEM_FRACTION (af3, default 0.95)
+#   WARMUP_RUNS (default 0: untimed runs of each size before the recorded one)
 #   af3: IMAGE MODEL_DIR OF3_WEIGHTS
-#   of3: OF3_SRC OF3_ENV CKPT RUNNER_YAML
+#   of3: CKPT RUNNER_YAML, then EITHER OF3_SRC OF3_ENV (a source checkout in its own env)
+#        OR KIT_KIND KIT_DIR KIT_ENV KIT_CONFIG KIT_MODE KIT_LEVERS_OFF KIT_CUDA_HOME KIT_LD
+#        (Anthropic's openfold3_ob0 kit; configs/of3kit_*.json, profiling/setup_kit_env.sh)
 
 set -euo pipefail
 
@@ -71,6 +74,7 @@ NUM_RECYCLES="${NUM_RECYCLES:-3}"
 TIME_BUDGET_S="${TIME_BUDGET_S:-0}"
 PER_SIZE_RESERVE_S="${PER_SIZE_RESERVE_S:-1800}"
 MAX_TOKENS="${MAX_TOKENS:-0}"
+WARMUP_RUNS="${WARMUP_RUNS:-0}"
 # AlphaFold3's arena as a fraction of the card. See AF3 MEMORY ENVIRONMENT above.
 MEM_FRACTION="${MEM_FRACTION:-0.95}"
 
@@ -110,22 +114,46 @@ af3)
     cp "$REPO_DIR/profiling/peak_mem.py" "$SCRATCH/peak_mem.py"
     ;;
 of3)
-    : "${OF3_SRC:?OF3_SRC must be set for engine of3}"
-    : "${OF3_ENV:?OF3_ENV must be set for engine of3}"
     : "${CKPT:?CKPT must be set for engine of3}"
     : "${RUNNER_YAML:?RUNNER_YAML must be set for engine of3}"
     POOL_DIR="$INPUT_DIR/of3_pool"
-    # Ported verbatim from slurm/predict_of3.sbatch — see its NON-OBVIOUS ENVIRONMENT
-    # note for why each of these is needed on these nodes.
-    if [[ ! -e "$OF3_ENV/bin/ptxas-blackwell" ]]; then
-        ln -sf "$OF3_ENV/bin/ptxas" "$OF3_ENV/bin/ptxas-blackwell" || true
-    fi
-    export PATH="$OF3_ENV/bin:$PATH"
-    export LD_LIBRARY_PATH="$OF3_ENV/lib:${LD_LIBRARY_PATH:-}"
-    export CUDA_HOME="$OF3_ENV"
     export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
     export TORCH_EXTENSIONS_DIR="$SCRATCH/torch_ext"
     export TRITON_CACHE_DIR="$SCRATCH/triton"
+    if [[ -n "${KIT_KIND:-}" ]]; then
+        # Anthropic's openfold3_ob0 kit (configs/of3kit_*.json). The kit's venv holds openfold3
+        # 0.5.0 at the kit's pin plus the kit packages; the kit's own pin check confirms that
+        # install file for file before any GPU time is spent. The card file is the kit's
+        # environment bootstrap (MODEL_OPT, the stack key, the cache dirs under MODEL_OPT_JIT_ROOT);
+        # it refuses with exit 3 when the package is not importable. KIT_CUDA_HOME and KIT_LD are
+        # the two host workarounds profiling/setup_kit_env.sh explains (deviations 2 and 3).
+        : "${KIT_DIR:?KIT_DIR must be set for the kit launcher}"
+        : "${KIT_ENV:?KIT_ENV must be set for the kit launcher}"
+        : "${KIT_MODE:?KIT_MODE must be set for the kit launcher}"
+        export PATH="$KIT_ENV/bin:$PATH"
+        [[ -n "${KIT_CUDA_HOME:-}" ]] && export CUDA_HOME="$KIT_CUDA_HOME"
+        [[ -n "${KIT_LD:-}" ]] && export LD_LIBRARY_PATH="$KIT_LD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        export MODEL_OPT_JIT_ROOT="$SCRATCH/jit"; mkdir -p "$MODEL_OPT_JIT_ROOT"
+        export OPENFOLD3_OB0_CKPT="$CKPT"
+        # The venv carries the kit's autoload hook: ANY python in it engages a kit mode when
+        # OPENFOLD3_OB0_OPT is set. The mode is selected by --mode below, never by the environment.
+        unset OPENFOLD3_OB0_OPT MODEL_OPT_LEVERS_OFF
+        python -I "$KIT_DIR/stock/check_pins.py" --quiet || { echo "ERROR: the kit venv's openfold3 is not at the kit's pin (stock/check_pins.py above)" >&2; exit 1; }
+        # shellcheck disable=SC1090
+        source "$KIT_DIR/configs/${KIT_CONFIG:-h100}.env"
+        [[ -n "${KIT_LEVERS_OFF:-}" && "$KIT_MODE" != "off" ]] && export MODEL_OPT_LEVERS_OFF="$KIT_LEVERS_OFF"
+    else
+        : "${OF3_SRC:?OF3_SRC must be set for engine of3 (or a launcher block)}"
+        : "${OF3_ENV:?OF3_ENV must be set for engine of3 (or a launcher block)}"
+        # Ported verbatim from slurm/predict_of3.sbatch — see its NON-OBVIOUS ENVIRONMENT
+        # note for why each of these is needed on these nodes.
+        if [[ ! -e "$OF3_ENV/bin/ptxas-blackwell" ]]; then
+            ln -sf "$OF3_ENV/bin/ptxas" "$OF3_ENV/bin/ptxas-blackwell" || true
+        fi
+        export PATH="$OF3_ENV/bin:$PATH"
+        export LD_LIBRARY_PATH="$OF3_ENV/lib:${LD_LIBRARY_PATH:-}"
+        export CUDA_HOME="$OF3_ENV"
+    fi
     ;;
 *)
     echo "ERROR: unknown ENGINE '$ENGINE' (expected af3 or of3)" >&2; exit 1 ;;
@@ -136,7 +164,8 @@ echo "=== VRAM sweep: $ARM ==="
 echo "engine        : $ENGINE   weights: $WEIGHTS   use_templates: $USE_TEMPLATES"
 echo "inputs        : $POOL_DIR"
 echo "table         : $TABLE"
-echo "samples       : $NUM_DIFFUSION_SAMPLES   recycles: $NUM_RECYCLES"
+echo "samples       : $NUM_DIFFUSION_SAMPLES   recycles: $NUM_RECYCLES   warmup runs: $WARMUP_RUNS"
+[[ -n "${KIT_KIND:-}" ]] && echo "launcher      : $KIT_KIND  mode=$KIT_MODE  levers_off=${MODEL_OPT_LEVERS_OFF:-none}  card file=${KIT_CONFIG:-h100}.env  kit=$KIT_DIR"
 [[ "$ENGINE" == "af3" ]] && echo "xla arena     : preallocate=true  mem_fraction=$MEM_FRACTION"
 echo "node          : $(hostname)   gpu: $GPU_NAME   driver: $DRIVER"
 echo "time budget   : ${TIME_BUDGET_S}s   per-size reserve: ${PER_SIZE_RESERVE_S}s"
@@ -145,14 +174,16 @@ echo "started       : $(date -Is)"
 # Run ONE pool: trace it, append its row to the table. Never aborts the surrounding
 # loop; the status is read back from results.json by the caller.
 run_size() {
-    local tokens="$1" n_chains="$2"
+    local tokens="$1" n_chains="$2" warm="${3:-}"
     local name trace_dir status
     name=$(printf 'pool_%05daa' "$tokens")
-    trace_dir="$OUT_DIR/$name"
+    # A warm-up run keeps its trace in scratch and appends no row: it exists only to compile
+    # and autotune the kernels the recorded run will then find in the caches.
+    if [[ -n "$warm" ]]; then trace_dir="$SCRATCH/warm/$name"; else trace_dir="$OUT_DIR/$name"; fi
     mkdir -p "$trace_dir"
 
     echo
-    echo "--- $tokens tokens ($n_chains chains) ---"
+    echo "--- $tokens tokens ($n_chains chains)${warm:+  [warm-up $warm/$WARMUP_RUNS, not recorded]} ---"
     echo "started     : $(date -Is)"
 
     # Removed before the run, never after: a size that dies before the counter can be
@@ -205,18 +236,51 @@ run_size() {
         use_templates_bool=$([[ "$USE_TEMPLATES" == "1" ]] && echo true || echo false)
         trace_args+=(--timing-glob "$SCRATCH/out/$name/seed_*/timing.json"
                      --summary "$SCRATCH/out/summary.txt")
-        cmd=(env "PYTHONPATH=$OF3_SRC" "$OF3_ENV/bin/python"
-             "$REPO_DIR/profiling/peak_mem.py"
-             --out "$peak_json" --engine of3 --module openfold3.run_openfold
-             --
-             predict
-             --query-json            "$query"
-             --use-msa-server=false
-             --use-templates="$use_templates_bool"
-             --runner-yaml           "$RUNNER_YAML"
-             --inference-ckpt-path   "$CKPT"
-             --output-dir            "$SCRATCH/out"
-             --num-diffusion-samples "$NUM_DIFFUSION_SAMPLES")
+        if [[ -n "${KIT_KIND:-}" && "$KIT_MODE" != "off" ]]; then
+            # The kit's entry point: `python -m openfold3_ob0_opt pred --mode M`, which is what
+            # the kit's run.sh execs after its own checks (done above, once). peak_mem.py wraps it
+            # like any module; the kit prints its ACTIVE and LEVER lines into inference.log.
+            cmd=(python "$REPO_DIR/profiling/peak_mem.py"
+                 --out "$peak_json" --engine of3 --module openfold3_ob0_opt
+                 --
+                 pred --mode "$KIT_MODE"
+                 --query-json            "$query"
+                 --output-dir            "$SCRATCH/out"
+                 --use-msa-server        false
+                 --use-templates         "$use_templates_bool"
+                 --runner-yaml           "$RUNNER_YAML"
+                 --num-diffusion-samples "$NUM_DIFFUSION_SAMPLES")
+        elif [[ -n "${KIT_KIND:-}" ]]; then
+            # mode off: stock OpenFold3 as the kit defines it. The kit's own `pred --mode off`
+            # runs stock in a clean subprocess that peak_mem.py cannot wrap, so upstream's entry
+            # point is called directly on the kit's stock yaml (configs/of3kit_stock_runner.yml),
+            # with the kit's mode variable unset so the venv's autoload hook stays inert.
+            cmd=(env -u OPENFOLD3_OB0_OPT -u MODEL_OPT_LEVERS_OFF python
+                 "$REPO_DIR/profiling/peak_mem.py"
+                 --out "$peak_json" --engine of3 --module openfold3.run_openfold
+                 --
+                 predict
+                 --query-json            "$query"
+                 --use-msa-server=false
+                 --use-templates="$use_templates_bool"
+                 --runner-yaml           "$RUNNER_YAML"
+                 --inference-ckpt-path   "$CKPT"
+                 --output-dir            "$SCRATCH/out"
+                 --num-diffusion-samples "$NUM_DIFFUSION_SAMPLES")
+        else
+            cmd=(env "PYTHONPATH=$OF3_SRC" "$OF3_ENV/bin/python"
+                 "$REPO_DIR/profiling/peak_mem.py"
+                 --out "$peak_json" --engine of3 --module openfold3.run_openfold
+                 --
+                 predict
+                 --query-json            "$query"
+                 --use-msa-server=false
+                 --use-templates="$use_templates_bool"
+                 --runner-yaml           "$RUNNER_YAML"
+                 --inference-ckpt-path   "$CKPT"
+                 --output-dir            "$SCRATCH/out"
+                 --num-diffusion-samples "$NUM_DIFFUSION_SAMPLES")
+        fi
     fi
 
     # </dev/null: the size loop reads the manifest on stdin, and a child process
@@ -225,6 +289,13 @@ run_size() {
     python3 "$REPO_DIR/profiling/run_with_trace.py" "${trace_args[@]}" -- "${cmd[@]}" </dev/null
     set -e
 
+    # OpenFold3 writes the traceback behind an "OOM for query_id" line to its own
+    # <output>/logs/predict_err_rank0.log, not to stdout, and labels every caught
+    # exception that way; without this copy a failed size is undiagnosable once the
+    # scratch is gone.
+    if [[ "$ENGINE" == "of3" && -d "$SCRATCH/out/logs" ]]; then
+        cp -r "$SCRATCH/out/logs" "$trace_dir/of3_logs" 2>/dev/null || true
+    fi
     # The structures are pools of identical chains and are never scored; only the
     # trace, the log and results.json are kept, so a 24-chain run does not leave
     # gigabytes behind.
@@ -232,6 +303,10 @@ run_size() {
 
     local results="$trace_dir/results.json"
     [[ -f "$results" ]] || { echo "ERROR: run_with_trace.py wrote no results.json" >&2; return 1; }
+    if [[ -n "$warm" ]]; then
+        echo "warm-up     : $(python3 -c "import json,sys; r=json.load(open(sys.argv[1])); print(r.get('status'), 'model', r.get('model_time_s'), 's')" "$results")"
+        return 0
+    fi
     python3 - "$results" "$TABLE" "$ARM" "$ENGINE" "$WEIGHTS" "$USE_TEMPLATES" \
              "$tokens" "$n_chains" "$NUM_DIFFUSION_SAMPLES" "$NUM_RECYCLES" \
              "$MEM_FRACTION" "$GPU_NAME" "$DRIVER" "$(hostname)" <<'ROWEOF'
@@ -289,6 +364,7 @@ while IFS=$'\t' read -r name tokens n_chains rest; do
         fi
     fi
 
+    for (( w = 1; w <= WARMUP_RUNS; w++ )); do run_size "$tokens" "$n_chains" "$w" || true; done
     run_size "$tokens" "$n_chains" || true
     STATUS=$(python3 -c "
 import json, sys

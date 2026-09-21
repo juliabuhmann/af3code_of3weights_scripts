@@ -37,6 +37,7 @@ Usage:
         --out profiling/results/vram_vs_tokens.png
 """
 
+import json
 import argparse
 import csv
 import os
@@ -148,7 +149,18 @@ def main() -> int:
         if not rows:
             print(f"  [WARN] {path} has no rows yet, skipping")
             continue
-        series.append((name, rows))
+        # An arm launched through a kit (configs/of3kit_*.json, `launcher` block) shares its
+        # engine with the plain of3 arm, so the engine label alone would not tell them apart;
+        # run_sweep.sh copies the arm's config next to its table, and its `tag` names the launcher.
+        tag = None
+        cfg_path = sweep_dir / name / "config.json"
+        if cfg_path.is_file():
+            try:
+                cfg = json.load(open(cfg_path))
+                tag = cfg.get("tag") if cfg.get("launcher") else None
+            except (OSError, json.JSONDecodeError):
+                tag = None
+        series.append((name, rows, tag))
     if not series:
         sys.exit("ERROR: every table is empty — has a sweep run?")
 
@@ -159,14 +171,14 @@ def main() -> int:
 
     # Only spell out the template state when the arms plotted do not agree on it.
     template_states = {next((r.get("use_templates", "") for r in rows), "")
-                       for _, rows in series}
+                       for _, rows, _ in series}
     with_templates = len(template_states) > 1
 
     capacities = set()
     arenas = set()
-    for (name, rows), colour in zip(series, ARM_COLOURS):
+    for (name, rows, tag), colour in zip(series, ARM_COLOURS):
         ok = [r for r in rows if r.get("status") == "ok"]
-        label = arm_label(rows, with_templates)
+        label = tag or arm_label(rows, with_templates)
 
         xs = [float(r["tokens"]) for r in ok]
         vram = [as_float(r.get(args.metric)) for r in ok]
@@ -230,7 +242,7 @@ def main() -> int:
     if not args.no_publish:
         publish_dir = args.publish_dir or args.out.parent
         publish_dir.mkdir(parents=True, exist_ok=True)
-        for name, rows in series:
+        for name, rows, _ in series:
             columns = [c for c in rows[0] if c not in HOST_COLUMNS]
             dest = publish_dir / f"{name}.tsv"
             with open(dest, "w", newline="") as fh:
@@ -246,7 +258,7 @@ def main() -> int:
     print(f"Saved {args.out}")
 
     # The same numbers as text, so the figure never has to be squinted at.
-    for name, rows in series:
+    for name, rows, _ in series:
         ok = [r for r in rows if r.get("status") == "ok"]
         bad = [r for r in rows if r.get("status") not in ("ok", "")]
         largest = max((int(float(r["tokens"])) for r in ok), default=0)
