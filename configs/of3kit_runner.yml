@@ -1,0 +1,10 @@
+# Caller overlay for the of3kit_exact / of3kit_fast arms. The kit lays a --runner-yaml OVER its
+# mode's own configuration, so this file holds only what the mode does not set:
+#
+# num_workers 0: build features in the main process. Upstream's default (10 workers, which the
+# kit's loader_workers lever reduces to 1) died on a 14-chain ~5,100-token pool with only
+# "DataLoader worker exited unexpectedly" and no error of its own; the same setting the of3 arm's
+# configs/of3_runner.yml carries.
+data_module_args:
+  num_workers: 0
+  num_workers_validation: 0

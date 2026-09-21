@@ -1,0 +1,30 @@
+# The Anthropic openfold3_ob0 kit's STOCK configuration, for the of3kit_off arm.
+#
+# Copied verbatim (comments removed) from the kit release at commit f4f62fa6592ae4938d49b1757bea0cfeff9f468e,
+# openfold3_ob0/opt/openfold3_ob0_opt/stock_cueq_bf16_notune_predict.yml, sha256 578cf896a099f3b7... -- the file
+# the kit's modes.STOCK_YAML names: what `pred --mode off` runs and the base of `exact`, so the arm every
+# kit arm is timed against. It is copied rather than referenced because `pred --mode off` runs stock in a
+# subprocess that profiling/peak_mem.py cannot wrap, so the off arm calls upstream's own entry point and
+# has to be handed this configuration explicitly; upstream takes ONE --runner-yaml, hence the merge with
+# data_module_args below (the same num_workers 0 as configs/of3kit_runner.yml, same reason).
+#
+# Compared with configs/of3_runner.yml (the of3 arm): no low_mem preset, trainer precision bf16-mixed
+# stated, chunk_size pinned at 1024 with the chunk tuner off. Those differences are the kit's definition
+# of stock, not ours, and are why of3kit_off is a separate arm from of3_openbind_templateoff.
+pl_trainer_args:
+  precision: bf16-mixed
+model_update:
+  presets:
+    - predict
+  custom:
+    settings:
+      memory:
+        eval:
+          use_triton_triangle_kernels: true
+          use_cueq_triangle_kernels: true
+          use_deepspeed_evo_attention: false
+          tune_chunk_size: false
+          chunk_size: 1024
+data_module_args:
+  num_workers: 0
+  num_workers_validation: 0
