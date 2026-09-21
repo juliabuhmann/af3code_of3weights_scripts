@@ -153,6 +153,77 @@ Also new for every OF3 arm: a failed size keeps OpenFold3's own `logs/predict_er
 its trace (`<arm>/pool_<N>aa/of3_logs/`). Upstream labels every caught exception "OOM for query_id",
 and the traceback behind that line lives only there.
 
+## Anthropic's kit on the AlphaFold 3 codebase: the `af3kit_*` arms (A100)
+
+The same release also ships `af3_jax`, an optimization kit for the AlphaFold 3 JAX codebase itself,
+pinned to the same upstream commit our fork branches from (sokrypton/alphafold3 v3.1.4) and to the
+OpenFold3 **preview-2** weights. Four arms run it, beside the production engine on the same card:
+
+| arm | config | what runs |
+|---|---|---|
+| `af3_openbind_templateoff_a100` | [`configs/af3_openbind_templateoff_a100.json`](../configs/af3_openbind_templateoff_a100.json) | the production image (openbind weights) on the A100 — the card baseline |
+| `af3kit_off_p2_templateoff_a100` | [`configs/af3kit_off_p2_templateoff_a100.json`](../configs/af3kit_off_p2_templateoff_a100.json) | the kit's stock route: the fork's `run_alphafold.py`, no lever |
+| `af3kit_exact_p2_templateoff_a100` | [`configs/af3kit_exact_p2_templateoff_a100.json`](../configs/af3kit_exact_p2_templateoff_a100.json) | `pred --mode exact` |
+| `af3kit_fast_p2_templateoff_a100` | [`configs/af3kit_fast_p2_templateoff_a100.json`](../configs/af3kit_fast_p2_templateoff_a100.json) | `pred --mode fast` (the kit's default) |
+| `af3kit_big_p2_templateoff_a100` | [`configs/af3kit_big_p2_templateoff_a100.json`](../configs/af3kit_big_p2_templateoff_a100.json) | `pred --mode big` — lowest peak memory |
+
+`engine` stays `af3`: same `af3_pool` inputs, same AlphaFold 3 log timers for `model_s`. The
+`launcher` block selects the kit's venv, card file, variant and mode;
+[`setup_af3kit_env.sh`](setup_af3kit_env.sh) builds every path it names and fetches + converts the
+preview-2 weights through the kit's own installer (digest-checked; the run's `WEIGHTS` line reads
+`pinned`). The kit is not vendored: the clone is pinned by `kit_commit`.
+
+**Not yet run.** Every row above was assembled and dry-run on 2026-09-21; no sweep has completed.
+Numbers that exist so far come from single pairs on an A100 outside this harness (kit modes
+`off`, `exact`, `fast` all produced structures; `fast` was 1.36x faster than `off` with four
+inputs in one process and slower with one input per process; see the openbind notes below).
+
+Things that shape how the rows must be read:
+
+* **Peak memory comes from the kit's own line.** A kit mode runs the model in a child process
+  that `peak_mem.py` cannot wrap. The kit prints `PEAK-NOTE ... peak_alloc_gib=` from its own
+  hook — `jax peak_bytes_in_use`, the same counter `peak_mem.py` reads — and
+  `run_with_trace.py` takes `peak_alloc_mib` from it when no `peak_mem.json` was written
+  (`peak_alloc_source` in `results.json` says which).
+* **`off` here is not the kit's own `off`.** The kit's stock route runs with an empty
+  `--cache_dir` by design (fresh compile cache per pass, no tokamax autotune table). The sweep
+  passes one node-local cache to every arm and size, as it does for the production image, so the
+  kit arms are comparable to each other and to `af3_openbind_templateoff_a100`.
+* **A per-process cost only kit modes pay.** Each kit mode attempts tokamax autotuning once per
+  process (~20 s by the kit's README; it fails on this jax/tokamax pair and is memoised). One size
+  per process here, so it lands inside `model_s`: large against a 500-token pool, under 3 % at
+  5,000. The kit's intended shape is many inputs per process; batch-infer runs pools that way.
+* **`fast` has a memory ceiling of its own.** Its diffusion-hoist lever keeps 24 per-block pair
+  tensors resident (the kit's comments: +6.4 GiB at 3,072 tokens, ~+11 GiB at 4,096), and the kit
+  puts `fast`'s limit near 3,072 tokens on an 80 GB card. Above that `big` is the mode, and `big`
+  switches several of `fast`'s levers off by construction. Where `fast` stops is a result.
+* **What the kit itself reports.** No end-to-end mode-vs-stock speed-up at any size. Its only
+  quantitative statements are per-lever savings at 2,048 / 3,072 tokens on one H100 (fused
+  triangle attention 18 / 43 s per input, fused triangle multiplication 6 / 14 s), and its kernel
+  tables are measured to 1,536 tokens. This sweep is the first measurement above that.
+* **Card.** The kit ships an `a100` card file; its headline is H100. On A100 the kit's README says
+  `big` leaves the fused triangle attention and fused transition off.
+* **OpenBind on this kit** needs four one-line changes ([`patches/af3_jax_openbind.diff`](patches/af3_jax_openbind.diff),
+  applied to the clone by the setup script, gated on `of3_openbind`, inert for preview-2): the
+  kit's vendored `run_alphafold.py` had no openbind switch, and three levers assume preview-2's
+  pair-bias axes or per-block pair LayerNorm. Verified on the A100 on one pair: patched `exact` and
+  `fast` reproduce stock's ipTM within 0.01 / 0.03; unpatched, `fast` stops on a missing
+  `pair_input_layer_norm` parameter (loud) and the bias site would be wrong silently. The arms
+  above run preview-2 on purpose, so the kit is measured as shipped first.
+
+```bash
+export AF3OF3_BASE_DIR=/path/to/workdir/af3code_of3weights
+AF3OF3_KIT_ROOT=/path/to/anthropic_kits bash profiling/setup_af3kit_env.sh   # once
+
+for arm in af3_openbind_templateoff_a100 af3kit_off_p2_templateoff_a100 \
+           af3kit_exact_p2_templateoff_a100 af3kit_fast_p2_templateoff_a100 af3kit_big_p2_templateoff_a100; do
+    bash profiling/run_sweep.sh --config configs/$arm.json --time 4:00:00     # gpupr.4h: 4 h is the partition's limit
+done
+# A job that runs out of wall clock leaves every finished size in <arm>/vram_sweep.tsv; submitting
+# the same line again resumes at the first size not yet recorded.
+pixi run python profiling/plot_vram.py --runtime --arms af3_openbind_templateoff_a100,af3kit_off_p2_templateoff_a100,af3kit_exact_p2_templateoff_a100,af3kit_fast_p2_templateoff_a100,af3kit_big_p2_templateoff_a100 --out profiling/results/a100_kit.png
+```
+
 ## Two measurement traps
 
 Both were hit on the first attempt, and both are why the numbers are collected the way
