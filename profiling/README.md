@@ -221,7 +221,7 @@ for arm in af3_openbind_templateoff_a100 af3kit_off_p2_templateoff_a100 \
 done
 # A job that runs out of wall clock leaves every finished size in <arm>/vram_sweep.tsv; submitting
 # the same line again resumes at the first size not yet recorded.
-pixi run python profiling/plot_vram.py --runtime --arms af3_openbind_templateoff_a100,af3kit_off_p2_templateoff_a100,af3kit_exact_p2_templateoff_a100,af3kit_fast_p2_templateoff_a100,af3kit_big_p2_templateoff_a100 --out profiling/results/a100_kit.png
+pixi run python profiling/plot_vram.py --runtime --arms af3_openbind_templateoff_a100 af3kit_off_p2_templateoff_a100 af3kit_exact_p2_templateoff_a100 af3kit_fast_p2_templateoff_a100 af3kit_big_p2_templateoff_a100 --out profiling/results/a100_kit.png
 ```
 
 ## Two measurement traps

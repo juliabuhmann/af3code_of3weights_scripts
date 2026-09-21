@@ -37,6 +37,7 @@ Usage:
         --out profiling/results/vram_vs_tokens.png
 """
 
+import itertools
 import json
 import argparse
 import csv
@@ -61,7 +62,10 @@ plt.rcParams.update({
     "legend.fontsize": 12,
 })
 
-ARM_COLOURS = ("#4C72B0", "#DD8452", "#55A868", "#C44E52")
+# Eight, and cycled below: `zip` with a shorter palette would drop every arm past the last
+# colour from the figure without a word, and a five-arm plot (stock + four kit modes) is now
+# the common case.
+ARM_COLOURS = ("#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3", "#937860", "#DA8BC3", "#8C8C8C")
 # Dropped from the published copy of a table: they name the compute host, not the
 # measurement. Same pair as scripts/08_publish_results.py drops.
 HOST_COLUMNS = ("node", "slurm_job_id")
@@ -176,7 +180,7 @@ def main() -> int:
 
     capacities = set()
     arenas = set()
-    for (name, rows, tag), colour in zip(series, ARM_COLOURS):
+    for (name, rows, tag), colour in zip(series, itertools.cycle(ARM_COLOURS)):
         ok = [r for r in rows if r.get("status") == "ok"]
         label = tag or arm_label(rows, with_templates)
 
