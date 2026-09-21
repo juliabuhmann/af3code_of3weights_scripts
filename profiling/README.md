@@ -94,6 +94,63 @@ pixi run python profiling/plot_vram.py --runtime --out profiling/results/vram_an
 table it plotted, and takes `--metric peak_vram_gib` to plot the nvidia-smi trace
 instead of the default live-buffer high-water.
 
+## A third way to launch the OF3 engine: Anthropic's optimization kit
+
+Anthropic's [uplifting-biomolecular-modeling](https://github.com/anthropics/uplifting-biomolecular-modeling)
+release (Apache-2.0, 2026-09-17, explicitly unmaintained) ships `openfold3_ob0`: OpenFold3 0.5.0 with
+the OpenBind-0 checkpoint — the same code family and the very same weights as the `of3` arm — plus
+drop-in optimization modes: `off` (stock, as the kit defines it), `exact` (outputs identical to stock)
+and `fast` (within stock's seed-to-seed variation). Three arms run it through this sweep:
+
+| arm | config | what runs |
+|---|---|---|
+| `of3kit_off_templateoff` | [`configs/of3kit_off_templateoff.json`](../configs/of3kit_off_templateoff.json) | upstream's entry point on the kit's stock yaml — the denominator |
+| `of3kit_exact_templateoff` | [`configs/of3kit_exact_templateoff.json`](../configs/of3kit_exact_templateoff.json) | `pred --mode exact` |
+| `of3kit_fast_templateoff` | [`configs/of3kit_fast_templateoff.json`](../configs/of3kit_fast_templateoff.json) | `pred --mode fast` |
+
+The kit is **not vendored**. A config's `launcher` block names a clone at a pinned commit, the venv,
+the kit's per-card file to source, the mode and the levers to disable;
+[`setup_kit_env.sh`](setup_kit_env.sh) builds every path the block names, following the kit's own
+route C with the three host deviations it documents (DeepSpeed without its DS4Sci op, an `nvcc`
+from conda for DeepSpeed's import-time probe, X11 client libraries from conda for RDKit). The engine
+stays `of3`: same queries, same `torch.cuda.max_memory_allocated` counter, same `timing.json` model
+time — only the launch differs, and `sweep.sbatch` picks it from the presence of the block.
+
+Three things a reader of the numbers should know.
+
+* **This card is outside the kit's tested set.** The kit ships card files for H100, A100, H200,
+  B200 and B300; the RTX PRO 6000 (compute capability 12.0) has none, so `h100.env` is sourced for
+  the environment bootstrap alone — the card files differ in one line, `MODEL_OPT_TARGET_GPU`, which
+  only the untested `big` mode consumes. Kernel tables resolve from the real compute capability at
+  run time; cc 12.0 has no tuned rows and gets the kit's safe settings, which the kit reports. One
+  `fast` lever, the fused pair transition, refuses on this architecture and is disabled by name
+  (`levers_off`). The `fast` speed-up here is therefore a lower bound on what the kit does on its
+  own hardware.
+* **Warm-up runs.** The kit compiles Triton kernels per tensor shape inside the timed loop, and
+  stock's own Triton kernels autotune per shape; a cold `fast` at 500 tokens measured slower than
+  cold stock. `warmup_runs: 1` (a config key, default 0, so no other arm changes) runs each size
+  once untimed before the recorded run, for all three kit arms equally.
+* **`off` is its own arm, not `of3_openbind_templateoff`.** The kit's stock yaml differs from
+  [`configs/of3_runner.yml`](../configs/of3_runner.yml) (no `low_mem` preset, bf16-mixed stated,
+  chunk size pinned with the tuner off), so a speed-up is only meaningful against
+  [`configs/of3kit_stock_runner.yml`](../configs/of3kit_stock_runner.yml), which copies the kit's
+  file with its provenance in the header.
+
+Status (2026-09-21): the launch path is validated at 500 tokens — `exact` and `fast` through the
+sweep itself, `off` by the identical command run by hand while a foreign process held the GPU.
+**No sweep has been run**; the tables and figures above do not include these arms. Submit as for
+any arm:
+
+```bash
+bash profiling/run_sweep.sh --config configs/of3kit_off_templateoff.json   --time 12:00:00
+bash profiling/run_sweep.sh --config configs/of3kit_exact_templateoff.json --time 12:00:00
+bash profiling/run_sweep.sh --config configs/of3kit_fast_templateoff.json  --time 12:00:00
+```
+
+Also new for every OF3 arm: a failed size keeps OpenFold3's own `logs/predict_err_rank0.log` next to
+its trace (`<arm>/pool_<N>aa/of3_logs/`). Upstream labels every caught exception "OOM for query_id",
+and the traceback behind that line lives only there.
+
 ## Two measurement traps
 
 Both were hit on the first attempt, and both are why the numbers are collected the way
