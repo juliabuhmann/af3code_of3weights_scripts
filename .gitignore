@@ -13,3 +13,6 @@ __pycache__/
 # meant to be committed, so the repo shows what it produced.
 data/
 *.log
+
+# SLURM stdout of interactive/agent jobs started from the repo root
+slurm-*.out
