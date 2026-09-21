@@ -236,6 +236,8 @@ def main() -> int:
     results = {
         "status": status,
         "peak_alloc_mib": peak_mem.get("peak_alloc_mib"),
+        # "peak_mem.py" (the wrapper read the framework's counter) or "kit PEAK-NOTE" (the kit's own line)
+        "peak_alloc_source": peak_mem.get("peak_alloc_source", "peak_mem.py" if peak_mem.get("peak_alloc_mib") is not None else None),
         "peak_reserved_mib": peak_mem.get("peak_reserved_mib"),
         "peak_vram_mib": parse_peak(trace_log),
         "gpu_total_mib": gpu_total,

@@ -127,8 +127,12 @@ af3)
         if [[ -n "${KIT_ENV_VARS:-}" ]]; then IFS=';' read -ra _kv <<< "$KIT_ENV_VARS"; for kv in "${_kv[@]}"; do export "$kv"; done; fi
         source "$KIT_DIR/configs/${KIT_CONFIG:-a100}.env"
         [[ -n "${KIT_LEVERS_OFF:-}" && "$KIT_MODE" != "off" ]] && export MODEL_OPT_LEVERS_OFF="$KIT_LEVERS_OFF"
-        python -m af3_jax_opt check --mode "$KIT_MODE" --variant "${KIT_VARIANT:-p2}" --model_dir "$MODEL_DIR" \
-            | grep -E "DRY-RUN|WEIGHTS|NOT ACTIVE" | cut -c1-200 || { echo "ERROR: the kit refuses mode $KIT_MODE here (above)" >&2; exit 1; }
+        # The kit's dry run: exit 3 = the mode cannot engage on this GPU/stack (NOT ACTIVE, named);
+        # 0 = ACTIVE. Gate on that code -- the kit prints to stderr, so a grep of stdout is empty.
+        if ! python -m af3_jax_opt check --mode "$KIT_MODE" --variant "${KIT_VARIANT:-p2}" --model_dir "$MODEL_DIR" > "$SCRATCH/kit_check.log" 2>&1; then
+            cat "$SCRATCH/kit_check.log" >&2; echo "ERROR: the kit refuses mode $KIT_MODE here (above)" >&2; exit 1
+        fi
+        grep -E "ACTIVE mode=|WEIGHTS" "$SCRATCH/kit_check.log" | cut -c1-200
     else
         : "${IMAGE:?IMAGE must be set for engine af3 without a kit launcher}"
     fi
