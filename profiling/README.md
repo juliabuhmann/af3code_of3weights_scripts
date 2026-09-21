@@ -100,13 +100,14 @@ Anthropic's [uplifting-biomolecular-modeling](https://github.com/anthropics/upli
 release (Apache-2.0, 2026-09-17, explicitly unmaintained) ships `openfold3_ob0`: OpenFold3 0.5.0 with
 the OpenBind-0 checkpoint — the same code family and the very same weights as the `of3` arm — plus
 drop-in optimization modes: `off` (stock, as the kit defines it), `exact` (outputs identical to stock)
-and `fast` (within stock's seed-to-seed variation). Three arms run it through this sweep:
+`fast` (within stock's seed-to-seed variation) and `big` (lowest peak GPU memory, numerics as fast). Four arms run it through this sweep:
 
 | arm | config | what runs |
 |---|---|---|
 | `of3kit_off_templateoff` | [`configs/of3kit_off_templateoff.json`](../configs/of3kit_off_templateoff.json) | upstream's entry point on the kit's stock yaml — the denominator |
 | `of3kit_exact_templateoff` | [`configs/of3kit_exact_templateoff.json`](../configs/of3kit_exact_templateoff.json) | `pred --mode exact` |
 | `of3kit_fast_templateoff` | [`configs/of3kit_fast_templateoff.json`](../configs/of3kit_fast_templateoff.json) | `pred --mode fast` |
+| `of3kit_big_templateoff` | [`configs/of3kit_big_templateoff.json`](../configs/of3kit_big_templateoff.json) | `pred --mode big` — lowest peak memory; below the kit's 1,401-token gate it is the fast line |
 
 The kit is **not vendored**. A config's `launcher` block names a clone at a pinned commit, the venv,
 the kit's per-card file to source, the mode and the levers to disable;
@@ -137,14 +138,15 @@ Three things a reader of the numbers should know.
   file with its provenance in the header.
 
 Status (2026-09-21): the launch path is validated at 500 tokens — `exact` and `fast` through the
-sweep itself, `off` by the identical command run by hand while a foreign process held the GPU.
-**No sweep has been run**; the tables and figures above do not include these arms. Submit as for
-any arm:
+sweep itself, `off` by the identical command run by hand while a foreign process held the GPU;
+`big` only dry-run (same path, different `--mode` word). **No sweep has been run**; the tables and
+figures above do not include these arms. Submit as for any arm:
 
 ```bash
 bash profiling/run_sweep.sh --config configs/of3kit_off_templateoff.json   --time 12:00:00
 bash profiling/run_sweep.sh --config configs/of3kit_exact_templateoff.json --time 12:00:00
 bash profiling/run_sweep.sh --config configs/of3kit_fast_templateoff.json  --time 12:00:00
+bash profiling/run_sweep.sh --config configs/of3kit_big_templateoff.json   --time 12:00:00
 ```
 
 Also new for every OF3 arm: a failed size keeps OpenFold3's own `logs/predict_err_rank0.log` next to

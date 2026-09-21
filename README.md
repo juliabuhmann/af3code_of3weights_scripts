@@ -94,7 +94,7 @@ loading; details in [`profiling/`](profiling/).
 ![Peak GPU memory and model time against complex size, AlphaFold 3 codebase vs OpenFold3 codebase](profiling/results/vram_and_runtime.png)
 
 A third launcher for the OpenFold3 arm — Anthropic's `openfold3_ob0` optimization kit, in its `off`,
-`exact` and `fast` modes on the same openbind weights — is wired into the same sweep
+`exact`, `fast` and `big` modes on the same openbind weights — is wired into the same sweep
 (`configs/of3kit_*.json`; [`profiling/README.md`](profiling/README.md)). It has not been run yet, so
 nothing below includes it.
 
