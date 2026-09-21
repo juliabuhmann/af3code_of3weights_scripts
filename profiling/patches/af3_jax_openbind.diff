@@ -1,0 +1,98 @@
+diff --git a/af3_jax/opt/af3_jax_opt/inprocess/hoist_logits.py b/af3_jax/opt/af3_jax_opt/inprocess/hoist_logits.py
+index 31b5089..0761a21 100644
+--- a/af3_jax/opt/af3_jax_opt/inprocess/hoist_logits.py
++++ b/af3_jax/opt/af3_jax_opt/inprocess/hoist_logits.py
+@@ -62,7 +62,8 @@ def _make_class(DHM):
+       """diffusion_hoist.HoistTransformer with resident (STORE_DTYPE, flat-indexed) per-block pair logits (HOIST_LOGITS)."""
+ 
+       def __call__(self, act, mask, single_cond, pair_cond, mode="stock", pair_logits_pre=None):
+-        of3 = getattr(self.global_config, "of3_weights", False)
++        # OPENBIND PATCH: same per-block pair-LayerNorm assumption as diffusion_hoist.py.
++        of3 = getattr(self.global_config, "of3_weights", False) and not getattr(self.global_config, "of3_openbind", False)
+         if mode == "stock" or not of3 or (mode == "step" and pair_logits_pre is None):
+             return super().__call__(act, mask, single_cond, pair_cond, mode=mode, pair_logits_pre=pair_logits_pre)   # the hoist's own answer (incl. precompute -> None off the of3 layout)
+         nsb = self.config.num_blocks // self.config.super_block_size
+diff --git a/af3_jax/opt/forward/fast_inference/patches/patched_files/run_alphafold.py b/af3_jax/opt/forward/fast_inference/patches/patched_files/run_alphafold.py
+index a0d3963..b54cd54 100644
+--- a/af3_jax/opt/forward/fast_inference/patches/patched_files/run_alphafold.py
++++ b/af3_jax/opt/forward/fast_inference/patches/patched_files/run_alphafold.py
+@@ -572,6 +572,7 @@ def make_model_config(
+     return_embeddings: bool = False,
+     return_distogram: bool = False,
+     of3_weights: bool = False,
++    of3_openbind: bool = False,   # OPENBIND PATCH: OpenFold3 >= 0.5.0 layout
+ ) -> model.Model.Config:
+   """Returns a model config with some defaults overridden."""
+   config = model.Model.Config()
+@@ -583,6 +584,7 @@ def make_model_config(
+   config.return_embeddings = return_embeddings
+   config.return_distogram = return_distogram
+   config.global_config.of3_weights = of3_weights
++  config.global_config.of3_openbind = of3_openbind
+   return config
+ 
+ 
+@@ -1399,6 +1401,25 @@ def main(_):
+   # Handle OF3 weight conversion before inference.
+   model_dir = MODEL_DIR.value
+   use_of3_weights = _OF3_WEIGHTS.value
++  # OPENBIND PATCH. The two OpenFold3 releases differ in two places the model reads from
++  # global_config: the ending-node pair bias axes and the diffusion transformer's pair
++  # LayerNorm scope. The fork resolves which by reading the of3_variant marker that
++  # convert_of3_weights.py writes beside the converted parameters; this script is the kit's
++  # own copy and had no such switch, so an openbind checkpoint took the preview-2 branch and
++  # stopped on a missing 'pair_input_layer_norm' parameter. Env override: AF3_JAX_OF3_OPENBIND.
++  def _resolve_of3_openbind(model_dir) -> bool:
++    forced = os.environ.get("AF3_JAX_OF3_OPENBIND", "auto").strip().lower()
++    if forced in ("true", "1", "yes"):
++      return True
++    if forced in ("false", "0", "no"):
++      return False
++    try:
++      marker = (pathlib.Path(str(model_dir)) / "of3_variant").read_text().strip()
++    except OSError:
++      print("Warning: no of3_variant marker beside the weights; assuming preview-2.")
++      return False
++    print(f"OF3 weights: variant={marker}")
++    return marker == "openbind"
+   if _OF3_CHECKPOINT.value:
+     model_dir = _maybe_convert_of3_weights(_OF3_CHECKPOINT.value, model_dir)
+     use_of3_weights = True
+@@ -1443,6 +1464,7 @@ def main(_):
+             return_embeddings=_SAVE_EMBEDDINGS.value,
+             return_distogram=_SAVE_DISTOGRAM.value,
+             of3_weights=use_of3_weights,
++            of3_openbind=_resolve_of3_openbind(model_dir),   # OPENBIND PATCH
+         ),
+         device=device,
+         model_dir=model_dir,
+diff --git a/af3_jax/opt/forward/flashpairformer/af3_flashpairformer/diffusion_hoist.py b/af3_jax/opt/forward/flashpairformer/af3_flashpairformer/diffusion_hoist.py
+index 7401f1a..2298e0e 100644
+--- a/af3_jax/opt/forward/flashpairformer/af3_flashpairformer/diffusion_hoist.py
++++ b/af3_jax/opt/forward/flashpairformer/af3_flashpairformer/diffusion_hoist.py
+@@ -65,7 +65,9 @@ class HoistTransformer(DT.Transformer):
+   mode='precompute' -> per-block pair logits [n_super, super_size, H, N, N] (f32); mode='step' -> blocks using the precomputed logits."""
+ 
+   def __call__(self, act, mask, single_cond, pair_cond, mode="stock", pair_logits_pre=None):
+-    of3 = getattr(self.global_config, "of3_weights", False)
++    # OPENBIND PATCH: this hoist assumes preview-2's per-block pair LayerNorm + projection.
++    # OpenBind runs ONE shared LayerNorm (AlphaFold3's own path), so the lever steps aside.
++    of3 = getattr(self.global_config, "of3_weights", False) and not getattr(self.global_config, "of3_openbind", False)
+     if mode == "precompute" and not of3:
+         return None                      # official layout: single shared pair LayerNorm + per-super-block projection stay in the step (not hoisted here)
+     if mode == "stock" or not of3 or (mode == "step" and pair_logits_pre is None):
+diff --git a/af3_jax/opt/forward/flashpairformer/af3_flashpairformer/patch.py b/af3_jax/opt/forward/flashpairformer/af3_flashpairformer/patch.py
+index 7ce4192..9df2815 100644
+--- a/af3_jax/opt/forward/flashpairformer/af3_flashpairformer/patch.py
++++ b/af3_jax/opt/forward/flashpairformer/af3_flashpairformer/patch.py
+@@ -124,7 +124,9 @@ def make_classes(stock_tm, stock_ga):
+                   "output_projection": {"weights": w("output_projection", (hd, c))}}
+             kp = A.attn_params_from_haiku(hp)
+             cfg = {**ATTN_CFG_DEFAULT, **ATTN_CFG_BY_N.get(n, {}), "f32_o": HI}
+-            of3 = bool(getattr(self.global_config, "of3_weights", False))     # sokrypton port: pair bias transposed for the ending node
++            # OPENBIND PATCH: preview-2 takes the ending-node pair bias from a transposed
++            # pair; OpenBind does not, so the fused block must not transpose it.
++            of3 = bool(getattr(self.global_config, "of3_weights", False) and not getattr(self.global_config, "of3_openbind", False))     # sokrypton port: pair bias transposed for the ending node
+             core = getattr(self, "triatt_xla_core", None)                    # the tree's TRIATT_XLA lever (af3_jax_opt/inprocess/triatt_xla.py) rebound GridSelfAttention beneath this class:
+             if core is None:                                                   #  absent = the fused block exactly as it was (one core function, the Pallas flash-attention kernel inside)
+                 return A.grid_self_attention_fused(act, pair_mask, kp, transpose=self.transpose, ending_bias_transposed=of3, cfg=cfg).astype(dt)
