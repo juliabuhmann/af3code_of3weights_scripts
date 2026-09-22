@@ -267,7 +267,7 @@ accumulates and no figure outlives the table beside it:
 | file | what |
 |---|---|
 | `vram_vs_tokens.png` | peak memory vs tokens, absolute |
-| `runtime_vs_tokens.png` | model time vs tokens, absolute |
+| `runtime_vs_tokens.png` | model time vs tokens, absolute. Where a set names a `speedup_at` token count, each curve's legend entry also carries its model time there and how many times the baseline's that is -- 5,000 tokens for `of3kit_rtxpro6000`, the size the pooled scheme actually runs |
 | `ratio_vs_tokens.png` | every arm **relative to the production engine** on that card: speed-up (baseline time / arm time, >1 faster) and peak memory as a fraction of the baseline's (<1 less), at the token counts both ran. Sweeps with a baseline only |
 | `metrics.tsv` | every plotted row, host columns dropped |
 | `manifest.json` | the arms in legend order, the baseline, each arm's source table and row count, the figures written, the commit that drew them |

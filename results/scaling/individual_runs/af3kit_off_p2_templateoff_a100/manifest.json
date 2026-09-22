@@ -10,8 +10,8 @@
   "sources": {
     "af3kit_off_p2_templateoff_a100": {
       "table": "$AF3OF3_BASE_DIR/profiling/af3kit_off_p2_templateoff_a100/vram_sweep.tsv",
-      "rows": 6,
-      "ok_rows": 6
+      "rows": 7,
+      "ok_rows": 7
     }
   },
   "figures": [
@@ -19,6 +19,7 @@
     "vram_vs_tokens.png"
   ],
   "script": "profiling/plot_vram.py",
-  "git_commit": "daf744d+dirty",
-  "metric": "peak_alloc_gib"
+  "git_commit": "1e877de+dirty",
+  "metric": "peak_alloc_gib",
+  "speedup_at_tokens": null
 }

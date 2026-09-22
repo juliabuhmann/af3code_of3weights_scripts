@@ -146,13 +146,13 @@ def label_arms(arms: list[Arm]) -> None:
 
 # --------------------------------------------------------------------------- figures
 
-def draw_line(ax, arm: Arm, key: str, index: int = 0, total: int = 1) -> bool:
+def draw_line(ax, arm: Arm, key: str, label: str | None = None) -> bool:
     pts = sorted(arm.ok_map(key).items())
     if not pts:
         return False
     xs, ys = zip(*pts)
     ax.plot(xs, ys, marker=fl.MARKER, ls=fl.LINESTYLE, color=arm.style["color"],
-            lw=fl.line_width(index, total), label=arm.label)
+            label=arm.label if label is None else label)
     return True
 
 
@@ -182,7 +182,7 @@ def reference_lines(ax, arms: list[Arm]) -> None:
 
 def plot_vram(arms: list[Arm], metric: str, out: Path, title: str | None) -> Path | None:
     fig, ax = plt.subplots(figsize=(9.0, 5.8))
-    drawn = [draw_line(ax, a, metric, i, len(arms)) for i, a in enumerate(arms)]
+    drawn = [draw_line(ax, a, metric) for a in arms]
     if not any(drawn):
         plt.close(fig)
         print(f"  vram_vs_tokens: no '{metric}' values in any arm, skipping "
@@ -199,20 +199,52 @@ def plot_vram(arms: list[Arm], metric: str, out: Path, title: str | None) -> Pat
     return fl.save(fig, out / "vram_vs_tokens.png")
 
 
-def plot_runtime(arms: list[Arm], out: Path, title: str | None) -> Path | None:
+def speedup_labels(arms: list[Arm], baseline: Arm | None, at_tokens: int | None) -> dict[str, str]:
+    """A legend suffix per arm: its model time at one token count, and how many times the
+    baseline's that is. The number belongs beside the curve it describes, and one size --
+    the one actually run in production -- is the one worth reading off exactly. An arm
+    with no row at that size gets no suffix rather than an interpolated one."""
+    if not at_tokens or baseline is None:
+        return {}
+    base = baseline.ok_map("model_s").get(at_tokens)
+    if base is None:
+        print(f"  [WARN] speed-up at {at_tokens} tokens: the baseline {baseline.name} has no "
+              f"model time there; the runtime figure is not annotated")
+        return {}
+    out = {baseline.name: f"{base:.0f} s at {at_tokens:,} tokens"}
+    for arm in arms:
+        if arm is baseline:
+            continue
+        value = arm.ok_map("model_s").get(at_tokens)
+        if value is not None:
+            out[arm.name] = f"{value:.0f} s at {at_tokens:,} tokens, {base / value:.2f}x faster"
+    return out
+
+
+def plot_runtime(arms: list[Arm], out: Path, title: str | None, baseline: Arm | None = None,
+                 at_tokens: int | None = None) -> Path | None:
     fig, ax = plt.subplots(figsize=(9.0, 5.8))
+    notes = speedup_labels(arms, baseline, at_tokens)
+    labels = {a.name: (f"{a.label}\n{notes[a.name]}" if a.name in notes else a.label) for a in arms}
     # A list, not a generator: any() would short-circuit and leave every arm after the
     # first one undrawn.
-    if not any([draw_line(ax, a, "model_s", i, len(arms)) for i, a in enumerate(arms)]):
+    if not any([draw_line(ax, a, "model_s", labels[a.name]) for a in arms]):
         plt.close(fig)
         print("  runtime_vs_tokens: no model_s values, skipping")
         return None
+    if notes:
+        # Where the numbers beside the curves were read off.
+        ax.axvline(at_tokens, color=fl.INK_FAINT, lw=1.2, ls="--", zorder=0)
+        ax.text(at_tokens, 0.02, f"{at_tokens:,} tokens ", rotation=90, va="bottom", ha="right",
+                transform=ax.get_xaxis_transform(), fontsize=10.5, color=fl.INK_MUTED)
     ax.set_xlabel(X_LABEL)
     ax.set_ylabel("Model time (s)")
     ax.set_title(title or "Featurisation + inference vs complex size")
     ax.set_ylim(bottom=0)
     if len(arms) > 1:
         fl.outside_legend(ax)
+    for name, note in notes.items():
+        print(f"  {name}: {note}")
     return fl.save(fig, out / "runtime_vs_tokens.png")
 
 
@@ -230,13 +262,13 @@ def plot_ratio(arms: list[Arm], baseline: Arm, metric: str, out: Path,
         return None, []
     fig, (ax_s, ax_m) = plt.subplots(1, 2, figsize=(16.0, 5.8))
     table = []
-    others = [a for a in arms if a is not baseline]
-    for index, arm in enumerate(others):
+    for arm in arms:
+        if arm is baseline:
+            continue
         t_map, m_map = arm.ok_map("model_s"), arm.ok_map(metric)
         common_t = sorted(set(t_map) & set(base_t))
         common_m = sorted(set(m_map) & set(base_m))
-        kw = dict(marker=fl.MARKER, ls=fl.LINESTYLE, color=arm.style["color"],
-                  lw=fl.line_width(index, len(others)), label=arm.label)
+        kw = dict(marker=fl.MARKER, ls=fl.LINESTYLE, color=arm.style["color"], label=arm.label)
         if common_t:
             ax_s.plot(common_t, [base_t[k] / t_map[k] for k in common_t], **kw)
         if common_m:
@@ -273,10 +305,11 @@ def sources_of(arms: list[Arm], sweep_dir: Path) -> dict[str, dict]:
 
 def write_directory(arms: list[Arm], out: Path, *, metric: str, baseline: Arm | None,
                     set_name: str | None, title: str | None, sweep_dir: Path,
-                    missing: list[str]) -> list[tuple]:
+                    missing: list[str], at_tokens: int | None = None) -> list[tuple]:
     out.mkdir(parents=True, exist_ok=True)
     figures, ratio_table = [], []
-    for path in (plot_vram(arms, metric, out, title), plot_runtime(arms, out, title)):
+    for path in (plot_vram(arms, metric, out, title),
+                 plot_runtime(arms, out, title, baseline, at_tokens)):
         if path:
             figures.append(path)
     if baseline is not None and len(arms) > 1:
@@ -287,7 +320,7 @@ def write_directory(arms: list[Arm], out: Path, *, metric: str, baseline: Arm | 
     fl.write_manifest(out, experiment=EXPERIMENT, script=SCRIPT, set_name=set_name, title=title,
                       arms=[a.name for a in arms], baseline=baseline.name if baseline else None,
                       sources=sources_of(arms, sweep_dir), figures=figures, missing=missing,
-                      extra={"metric": metric})
+                      extra={"metric": metric, "speedup_at_tokens": at_tokens})
     return ratio_table
 
 
@@ -333,11 +366,16 @@ def main() -> int:
     ap.add_argument("--metric", choices=("peak_alloc_gib", "peak_vram_gib"), default="peak_alloc_gib",
                     help="Which memory column to plot (default: peak_alloc_gib, the framework's own "
                          "live-buffer high-water)")
+    ap.add_argument("--speedup-at", type=int, default=None, metavar="TOKENS",
+                    help="Label each curve on the runtime figure with its model time at this "
+                         "token count and how many times the baseline's it is (default: the "
+                         "set's `speedup_at`, when it names one)")
     ap.add_argument("--no-individual", action="store_true",
                     help="Write only the sweep directory, not one directory per arm")
     args = ap.parse_args()
 
     set_name, names, baseline_name, title = fl.resolve_selection(args, EXPERIMENT)
+    at_tokens = args.speedup_at or fl.set_key(args, EXPERIMENT, "speedup_at")
     sweep_dir = args.sweep_dir or fl.base_dir() / "profiling"
     styles = fl.styles_for(names)
     fl.apply_style()
@@ -356,7 +394,8 @@ def main() -> int:
     out = fl.sweep_dir(EXPERIMENT, set_name, [a.name for a in arms], args.results_root)
     print(f"sweep -> {out}")
     ratio_table = write_directory(arms, out, metric=args.metric, baseline=baseline, set_name=set_name,
-                                  title=title, sweep_dir=sweep_dir, missing=missing)
+                                  title=title, sweep_dir=sweep_dir, missing=missing,
+                                  at_tokens=at_tokens)
     if not args.no_individual:
         for arm in arms:
             out_i = fl.individual_dir(EXPERIMENT, arm.name, args.results_root)

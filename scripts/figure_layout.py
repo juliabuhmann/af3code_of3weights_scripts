@@ -138,6 +138,17 @@ def resolve_selection(args, experiment: str) -> tuple[str | None, list[str], str
     return None, arms, baseline, None
 
 
+def set_key(args, experiment: str, key: str, default=None):
+    """One extra key of the selected set, or `default` when arms were passed by hand.
+
+    Lets a set carry a parameter of the comparison it defines (which token count the
+    speed-up is quoted at, say) instead of it being typed on the command line each time."""
+    if not getattr(args, "set_name", None):
+        return default
+    spec = load_sets(args.sets_file, experiment).get(args.set_name, {})
+    return spec.get(key, default)
+
+
 # ----------------------------------------------------------------------------- style
 
 def apply_style() -> None:
@@ -199,23 +210,10 @@ def load_styles(path: Path = STYLE_FILE) -> dict[str, dict]:
     return {k: v for k, v in styles.items() if not k.startswith("_")}
 
 
-# One marker and one line style for every series: colour is the identity channel, and it
-# is the only thing that varies between arms.
+# One marker, one line style and one width for every series: colour is the identity
+# channel, and it is the only thing that varies between arms.
 MARKER = "o"
 LINESTYLE = "-"
-
-
-def line_width(index: int, total: int) -> float:
-    """Series width, tapering from 3.2 to 2.0 down the legend order.
-
-    Not an encoding -- nothing reads it, and the taper is small enough to pass for one
-    weight. It exists because some arms measure the same thing and their curves coincide
-    exactly (the kit's `off` and `exact` modes; `big` below its reach gate and `big` with
-    the gate held open). Drawn at one width the later arm would hide the earlier one
-    completely; drawn this way the earlier one shows as a rim around it."""
-    if total < 2:
-        return 2.4
-    return 3.2 - 1.2 * index / (total - 1)
 
 
 def styles_for(arms: list[str], path: Path = STYLE_FILE) -> dict[str, dict]:

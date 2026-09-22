@@ -32,6 +32,7 @@
     "vram_vs_tokens.png"
   ],
   "script": "profiling/plot_vram.py",
-  "git_commit": "daf744d+dirty",
-  "metric": "peak_alloc_gib"
+  "git_commit": "1e877de+dirty",
+  "metric": "peak_alloc_gib",
+  "speedup_at_tokens": 5000
 }

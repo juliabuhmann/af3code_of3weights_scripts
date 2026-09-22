@@ -40,7 +40,8 @@
       "of3kit_off_templateoff",
       "of3kit_big_reachoff_templateoff"
     ],
-    "baseline": "af3_openbind_templateoff"
+    "baseline": "af3_openbind_templateoff",
+    "speedup_at": 5000
   },
   "af3kit_a100": {
     "experiment": "scaling",

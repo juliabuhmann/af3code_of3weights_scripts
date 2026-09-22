@@ -139,11 +139,10 @@ def plot_dockq_distribution(rows, arms, labels, styles, baseline, out, title) ->
     fig, axes = plt.subplots(1, 2 if paired else 1, figsize=(14.0 if paired else 8.0, 5.6),
                              squeeze=False)
     ax1 = axes[0][0]
-    for index, arm in enumerate(arms):
+    for arm in arms:
         xs = np.sort(np.array([values[arm][e] for e in common]))
         ys = np.arange(1, len(xs) + 1) / len(xs)
         ax1.step(xs, ys, where="post", color=styles[arm]["color"],
-                 lw=fl.line_width(index, len(arms)),
                  label=f"{labels[arm]}\nmedian {np.median(xs):.3f}")
     for threshold, name in DOCKQ_THRESHOLDS:
         ax1.axvline(threshold, ls=":", lw=1.0, color=fl.INK_FAINT, zorder=0)

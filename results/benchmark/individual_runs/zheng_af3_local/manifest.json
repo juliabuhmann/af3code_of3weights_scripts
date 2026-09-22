@@ -19,6 +19,6 @@
     "dockq_distribution.png"
   ],
   "script": "scripts/06_plot_comparison.py",
-  "git_commit": "daf744d+dirty",
+  "git_commit": "1e877de+dirty",
   "runtime_column": "model_s"
 }
