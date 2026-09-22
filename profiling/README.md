@@ -235,6 +235,37 @@ done
 pixi run python profiling/plot_vram.py --runtime --arms af3_openbind_templateoff_a100 af3kit_off_p2_templateoff_a100 af3kit_exact_p2_templateoff_a100 af3kit_fast_p2_templateoff_a100 af3kit_big_p2_templateoff_a100 --out profiling/results/a100_kit.png
 ```
 
+## Where figures go, and the relative view
+
+Figures and published tables live under `profiling/results/<set>/`, one directory per named
+comparison in [`results_sets.json`](results_sets.json), with fixed file names, so a re-run
+overwrites rather than accumulates:
+
+| file | what |
+|---|---|
+| `vram_vs_tokens.png` | peak memory vs tokens, absolute |
+| `vram_and_runtime.png` | the same plus model time, absolute (`--runtime`) |
+| `relative_to_<baseline>.png` | every arm **relative to the production engine** on that card: speed-up (baseline time / arm time, >1 faster) and peak memory as a fraction of the baseline's (<1 less), at the token counts both ran (`--relative`) |
+| `<arm>.tsv` | each arm's table, host columns dropped |
+
+```bash
+pixi run python profiling/plot_vram.py --set af3kit_a100 --runtime     # absolute
+pixi run python profiling/plot_vram.py --set af3kit_a100 --relative    # vs the set's baseline
+```
+
+The relative figure is the one a decision reads off: it answers "how much faster or slower than
+what we run today, at the sizes we run". Two things to keep in mind when reading it.
+
+* **It only exists where the baseline ran.** An arm that reaches further than the baseline shows
+  nothing beyond the baseline's last size; that reach is a result the absolute figure carries.
+  Dotted verticals mark where an arm stopped before the baseline did.
+* **Warm-up parity.** The kit arms run each size once untimed first (`warmup_runs: 1`), because
+  they compile kernels per shape inside the timed line; the original `af3_openbind_templateoff`
+  table predates that option and was timed cold. At small sizes AlphaFold 3's XLA compile is a
+  large share of `model_s`, so the ratios there flatter the kit arms. The A100 baseline
+  (`af3_openbind_templateoff_a100`) was run with `warmup_runs: 1` and is fair at every size;
+  re-run the RTX PRO 6000 baseline with it before quoting its small-size ratios.
+
 ## Two measurement traps
 
 Both were hit on the first attempt, and both are why the numbers are collected the way

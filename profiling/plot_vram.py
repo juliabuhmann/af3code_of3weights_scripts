@@ -108,6 +108,110 @@ def arm_label(rows: list[dict], with_templates: bool) -> str:
     return f"{engine_label} ({TEMPLATE_STATE.get(templates, 'templates ?')})"
 
 
+def publish_tables(series, args) -> None:
+    """Copy each arm's table beside the figure, without the host columns (the same pair
+    scripts/08_publish_results.py drops)."""
+    if args.no_publish:
+        return
+    publish_dir = args.publish_dir or args.out.parent
+    publish_dir.mkdir(parents=True, exist_ok=True)
+    for name, rows, _ in series:
+        columns = [c for c in rows[0] if c not in HOST_COLUMNS]
+        dest = publish_dir / f"{name}.tsv"
+        with open(dest, "w", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=columns, delimiter="\t", extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"Saved {dest}")
+
+
+def plot_relative(series, args, set_title=None) -> int:
+    """Every arm relative to one baseline arm, at the token counts both ran.
+
+    Left: speed-up = baseline model_s / arm model_s -- above 1 the arm is faster than the
+    baseline, below 1 slower. Right: peak memory as a fraction of the baseline's -- below 1 the
+    arm needs less. Both panels share the x axis (tokens) and carry a line at 1. A token count
+    the baseline did not finish (its boundary) has no ratio, so an arm that reaches FURTHER than
+    the baseline shows nothing there: that reach is a result the absolute figure carries, not
+    this one. Only `status == ok` rows on both sides are used.
+    """
+    by_name = {name: rows for name, rows, _ in series}
+    tags = {name: tag for name, rows, tag in series}
+    base_name = args.relative_to
+    if base_name not in by_name:
+        sys.exit(f"ERROR: --relative-to {base_name}: no such arm among {sorted(by_name)}")
+
+    def ok_map(rows, key):
+        out = {}
+        for r in rows:
+            if r.get("status") != "ok":
+                continue
+            v = as_float(r.get(key))
+            if v is not None:
+                out[int(float(r["tokens"]))] = v
+        return out
+
+    base_t = ok_map(by_name[base_name], "model_s")
+    base_m = ok_map(by_name[base_name], args.metric)
+    if not base_t:
+        sys.exit(f"ERROR: baseline {base_name} has no ok rows with model_s")
+    template_states = {next((r.get("use_templates", "") for r in rows), "") for _, rows, _ in series}
+    with_templates = len(template_states) > 1
+    base_label = tags.get(base_name) or arm_label(by_name[base_name], with_templates)
+
+    fig, (ax_s, ax_m) = plt.subplots(1, 2, figsize=(18.0, 5.8))
+    table = []                                   # (arm, tokens, speedup, mem_ratio) for the printout
+    others = [(n, r, tg) for n, r, tg in series if n != base_name]
+    for (name, rows, tag), colour in zip(others, itertools.cycle(ARM_COLOURS)):
+        label = tag or arm_label(rows, with_templates)
+        t_map, m_map = ok_map(rows, "model_s"), ok_map(rows, args.metric)
+        common_t = sorted(set(t_map) & set(base_t))
+        common_m = sorted(set(m_map) & set(base_m))
+        if common_t:
+            ys = [base_t[k] / t_map[k] for k in common_t]
+            ax_s.plot(common_t, ys, "o-", color=colour, lw=2.2, ms=7, label=label)
+        if common_m:
+            ax_m.plot(common_m, [m_map[k] / base_m[k] for k in common_m], "s-", color=colour, lw=2.2, ms=7, label=label)
+        for k in sorted(set(common_t) | set(common_m)):
+            table.append((name, k,
+                          base_t[k] / t_map[k] if k in t_map and k in base_t else None,
+                          m_map[k] / base_m[k] if k in m_map and k in base_m else None))
+        # the arm's own boundary, if it stopped before the baseline did
+        bad = [int(float(r["tokens"])) for r in rows if r.get("status") not in ("ok", "")]
+        if bad and min(bad) <= max(base_t):
+            for ax in (ax_s, ax_m):
+                ax.axvline(min(bad), color=colour, ls=":", lw=1.4, alpha=0.8)
+
+    for ax in (ax_s, ax_m):
+        ax.axhline(1.0, color="#555555", lw=1.4, ls="--", zorder=0)
+        ax.set_xlabel("Tokens (= residues, protein-only pools)")
+        ax.grid(True, alpha=0.3)
+    ax_s.set_ylabel(f"Speed-up over {base_label}  (baseline time / arm time)")
+    ax_s.set_title("Model time relative to the baseline  (>1 = faster)")
+    ax_s.set_ylim(bottom=0)
+    ax_s.legend(loc="best", frameon=False)
+    ax_m.set_ylabel(f"Peak memory / {base_label}")
+    ax_m.set_title("Peak live GPU memory relative to the baseline  (<1 = less)")
+    ax_m.set_ylim(bottom=0)
+    ax_m.legend(loc="best", frameon=False)
+    fig.suptitle((set_title + "\n" if set_title else "") +
+                 f"relative to {base_name}; dotted verticals = where an arm stopped (its boundary)",
+                 fontsize=12)
+    fig.tight_layout()
+
+    publish_tables(series, args)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(args.out, dpi=DPI, bbox_inches="tight", pad_inches=0.25)
+    plt.close(fig)
+    print(f"Saved {args.out}")
+
+    print(f"\nrelative to {base_name}   (speed-up = baseline model_s / arm model_s; memory = arm / baseline)")
+    print(f"{'arm':44s} {'tokens':>7s} {'speed-up':>9s} {'memory':>7s}")
+    for name, k, s, m in table:
+        print(f"{name:44s} {k:>7d} {('%.2fx' % s) if s else '-':>9s} {('%.2f' % m) if m else '-':>7s}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -116,8 +220,16 @@ def main() -> int:
                          "(default: $AF3OF3_BASE_DIR/profiling)")
     ap.add_argument("--arms", nargs="*", default=None,
                     help="Arm directories to plot, in legend order (default: all)")
-    ap.add_argument("--out", type=Path,
-                    default=Path("profiling/results/vram_vs_tokens.png"))
+    ap.add_argument("--set", dest="set_name", default=None,
+                    help="A named figure set from profiling/results_sets.json: its arms, its "
+                         "title, and profiling/results/<set>/ as the output directory with fixed "
+                         "file names (vram_vs_tokens.png, vram_and_runtime.png, <arm>.tsv, "
+                         "manifest.json). The reproducible unit -- prefer it over --arms/--out.")
+    ap.add_argument("--sets-file", type=Path,
+                    default=Path(__file__).resolve().parent / "results_sets.json")
+    ap.add_argument("--out", type=Path, default=None,
+                    help="Figure path (default: profiling/results/vram_vs_tokens.png, or the "
+                         "set's directory when --set is given)")
     ap.add_argument("--metric", choices=("peak_alloc_gib", "peak_vram_gib"),
                     default="peak_alloc_gib",
                     help="Which memory column to plot (default: peak_alloc_gib, the "
@@ -129,7 +241,46 @@ def main() -> int:
                     help="Do not copy the tables, only write the figure")
     ap.add_argument("--runtime", action="store_true",
                     help="Add a second panel with model_s vs tokens")
+    ap.add_argument("--relative-to", metavar="ARM", default=None,
+                    help="Instead of absolute curves, plot every other arm RELATIVE to this one at "
+                         "each token count the two share: speed-up = ARM's model_s / the arm's "
+                         "(>1 faster), and peak memory as a fraction of ARM's (<1 less). ARM is "
+                         "the production engine, typically af3_openbind_templateoff[_a100].")
+    ap.add_argument("--relative", action="store_true",
+                    help="With --set: --relative-to the set's `baseline` from results_sets.json")
     args = ap.parse_args()
+
+    # --set: resolve arms, title and the output directory from results_sets.json
+    set_title = None
+    if args.set_name:
+        try:
+            sets = json.load(open(args.sets_file))
+        except OSError as exc:
+            sys.exit(f"ERROR: cannot read {args.sets_file}: {exc}")
+        spec = sets.get(args.set_name)
+        if spec is None:
+            named = ", ".join(k for k in sets if not k.startswith("_"))
+            sys.exit(f"ERROR: no set '{args.set_name}' in {args.sets_file} (have: {named})")
+        if args.arms:
+            sys.exit("ERROR: pass --set or --arms, not both")
+        args.arms = list(spec["arms"])
+        set_title = spec.get("title")
+        if args.relative and not args.relative_to:
+            args.relative_to = spec.get("baseline")
+            if not args.relative_to:
+                sys.exit(f"ERROR: set '{args.set_name}' names no `baseline` in {args.sets_file}; pass --relative-to ARM")
+        set_dir = (args.out.parent if args.out else Path("profiling/results")) / args.set_name
+        set_dir.mkdir(parents=True, exist_ok=True)
+        if args.relative_to:
+            args.out = set_dir / f"relative_to_{args.relative_to}.png"
+        else:
+            args.out = set_dir / ("vram_and_runtime.png" if args.runtime else "vram_vs_tokens.png")
+    elif args.relative and not args.relative_to:
+        sys.exit("ERROR: --relative needs --set (whose baseline it uses) or --relative-to ARM")
+    elif args.out is None:
+        args.out = Path("profiling/results/relative.png" if args.relative_to else "profiling/results/vram_vs_tokens.png")
+    if args.relative_to and args.arms and args.relative_to not in args.arms:
+        args.arms = [args.relative_to] + list(args.arms)          # the baseline's table is needed even if not asked for
 
     sweep_dir = args.sweep_dir
     if sweep_dir is None:
@@ -167,6 +318,9 @@ def main() -> int:
         series.append((name, rows, tag))
     if not series:
         sys.exit("ERROR: every table is empty — has a sweep run?")
+
+    if args.relative_to:
+        return plot_relative(series, args, set_title)
 
     n_panels = 2 if args.runtime else 1
     fig, axes = plt.subplots(1, n_panels, figsize=(9.0 * n_panels, 5.8),
@@ -243,18 +397,7 @@ def main() -> int:
         ax_t.grid(True, alpha=0.3)
         ax_t.legend(loc="upper left", frameon=False)
 
-    if not args.no_publish:
-        publish_dir = args.publish_dir or args.out.parent
-        publish_dir.mkdir(parents=True, exist_ok=True)
-        for name, rows, _ in series:
-            columns = [c for c in rows[0] if c not in HOST_COLUMNS]
-            dest = publish_dir / f"{name}.tsv"
-            with open(dest, "w", newline="") as fh:
-                writer = csv.DictWriter(fh, fieldnames=columns, delimiter="\t",
-                                        extrasaction="ignore")
-                writer.writeheader()
-                writer.writerows(rows)
-            print(f"Saved {dest}")
+    publish_tables(series, args)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.out, dpi=DPI, bbox_inches="tight", pad_inches=0.25)
