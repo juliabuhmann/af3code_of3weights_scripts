@@ -1,2 +1,0 @@
-arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver
-af3kit_fast_p2_templateoff_a100	af3	p2	false	500	2	error	0.0			0		81920	3		1	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
