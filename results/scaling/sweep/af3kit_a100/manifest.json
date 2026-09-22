@@ -30,7 +30,7 @@
     "vram_vs_tokens.png"
   ],
   "script": "profiling/plot_vram.py",
-  "git_commit": "0e59948+dirty",
+  "git_commit": "6030812+dirty",
   "metric": "peak_alloc_gib",
   "speedup_at_tokens": null
 }

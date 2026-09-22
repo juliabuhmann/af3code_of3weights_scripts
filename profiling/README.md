@@ -277,11 +277,17 @@ pixi run plot-scaling --set af3kit_a100                  # the set's directory
 pixi run plot-scaling --set af3kit_a100 --no-individual  # without the per-arm directories
 ```
 
-Each arm's colour, marker and line style come from
+A legend entry is the arm config's `tag` as this repository has it now, minus any axis every
+arm in the figure agrees on (the weights, when they all run the same ones -- the title says so).
+Only the display label follows the repository; the axes a row is read by (engine, weights,
+templates) still come from the config copied beside the data at submit time, so they describe
+what actually ran. Renaming a series therefore costs a re-plot, not a re-run.
+
+Each arm's colour comes from
 [`configs/arm_style.json`](../configs/arm_style.json) and never change between figures, so
 the same curve is the same arm everywhere. Two arms in one figure may not share a colour;
-the plotting scripts refuse rather than draw them the same. Where two arms' curves coincide
-(`off` under `exact`, `big` under `big` with the reach gate off) the dashed one stays visible.
+the plotting scripts refuse rather than draw them the same. Colour is the only channel that
+varies: every series is drawn with the same marker and a solid line.
 
 The relative figure is the one a decision reads off: it answers "how much faster or slower than
 what we run today, at the sizes we run". Two things to keep in mind when reading it.

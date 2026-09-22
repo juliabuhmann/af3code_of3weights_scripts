@@ -1,7 +1,7 @@
 {
   "experiment": "scaling",
   "set": "of3kit_rtxpro6000",
-  "title": "Anthropic openfold3_ob0 kit on the RTX PRO 6000: stock OpenFold3 vs `big` with the reach gate off, openbind weights",
+  "title": "Anthropic openfold3_ob0 kit vs stock OpenFold3, openbind weights, RTX PRO 6000",
   "arms": [
     "af3_openbind_templateoff",
     "of3kit_off_templateoff",
@@ -32,7 +32,7 @@
     "vram_vs_tokens.png"
   ],
   "script": "profiling/plot_vram.py",
-  "git_commit": "0e59948+dirty",
+  "git_commit": "6030812+dirty",
   "metric": "peak_alloc_gib",
   "speedup_at_tokens": 5000
 }

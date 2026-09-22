@@ -120,15 +120,28 @@ def load_arm(sweep_dir: Path, name: str, style: dict) -> Arm | None:
     if not rows:
         print(f"  [WARN] {name}: {path} has no rows yet, skipping")
         return None
-    # run_sweep.sh copies the arm's config next to its table; its `tag` is the legend label.
-    tag = None
-    cfg_path = sweep_dir / name / "config.json"
-    if cfg_path.is_file():
-        try:
-            tag = json.load(open(cfg_path)).get("tag")
-        except (OSError, json.JSONDecodeError):
-            tag = None
-    return Arm(name, rows, tag, style)
+    return Arm(name, rows, arm_tag(sweep_dir, name), style)
+
+
+def arm_tag(sweep_dir: Path, name: str) -> str | None:
+    """The arm's short display label: this repository's config if it still has one, else
+    the copy run_sweep.sh left beside the table.
+
+    The two are read for different things on purpose. The axes a row is interpreted by
+    (engine, weights, use_templates) come from the copy beside the data, so they describe
+    what actually ran and cannot drift when the repository's configs move on. `tag` is
+    only what a legend says, and the repository owns it: renaming a series then costs a
+    re-plot instead of a re-run, and a sweep whose data lives on read-only storage can
+    still be relabelled."""
+    for path in (fl.REPO / "configs" / f"{name}.json", sweep_dir / name / "config.json"):
+        if path.is_file():
+            try:
+                tag = json.load(open(path)).get("tag")
+            except (OSError, json.JSONDecodeError):
+                continue
+            if tag:
+                return tag
+    return None
 
 
 def label_arms(arms: list[Arm]) -> None:

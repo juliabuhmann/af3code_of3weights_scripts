@@ -21,7 +21,7 @@
   },
   "of3kit_rtxpro6000": {
     "experiment": "scaling",
-    "title": "Anthropic openfold3_ob0 kit on the RTX PRO 6000: stock OpenFold3 vs `big` with the reach gate off, openbind weights",
+    "title": "Anthropic openfold3_ob0 kit vs stock OpenFold3, openbind weights, RTX PRO 6000",
     "_note": [
       "of3kit_fast_templateoff and of3kit_big_templateoff are deliberately NOT in this set.",
       "of3kit_big_templateoff ran with the kit's reach gate at its H100 table value (4500 tokens),",

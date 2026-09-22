@@ -1,7 +1,7 @@
 {
   "name_tag": "of3kit_big_reachoff_templateoff",
-  "label": "OF3 code + Anthropic kit `big` with the reach gate off (fused kernels + offload at every size), no templates, openbind weights",
-  "tag": "OF3 code / kit big, reach gate off / openbind weights",
+  "label": "OF3 code + Anthropic kit `big` (fused kernels + offload at every size), no templates, openbind weights",
+  "tag": "OF3 code / kit big / openbind weights",
   "engine": "of3",
   "weights": "openbind",
   "use_templates": false,
