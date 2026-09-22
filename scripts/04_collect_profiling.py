@@ -38,10 +38,17 @@ Columns written
                         af3   featurisation_s + inference_s from the AF3 log.
                         of3   runtime_s from OF3's per-seed timing.json, summed over
                               seeds, which covers its predict loop for the query.
-                      The two are not identical in what they include — OF3 does its
-                      featurisation inside the predict loop — so model_s is the
-                      honest common denominator, and featurisation_s/inference_s stay
-                      blank for of3 rather than being invented.
+                      NOT YET IDENTICAL in what they include. OpenFold3 builds its
+                      features in the DataLoader, BEFORE the predict loop its timer
+                      covers, so runtime_s leaves featurisation out while the AF3
+                      number counts it — measured on the token sweep, the gap grows
+                      with input size (55 s of it at 5000 tokens). This stage has not
+                      been fixed yet; profiling/peak_mem.py now measures the OF3
+                      featurisation directly (a predict-timeline callback) and
+                      profiling/run_with_trace.py uses it, so the sweep's model_s is
+                      like-for-like from its next run onwards. Benchmark rows are not,
+                      and featurisation_s/inference_s stay blank for of3 here rather
+                      than being invented.
     gpu_name, node, exit_code
                       gpu_name is carried on every row because a timing comparison
                       across different GPU models would be meaningless.

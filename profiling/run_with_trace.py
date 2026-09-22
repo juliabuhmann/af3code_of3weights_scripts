@@ -33,12 +33,22 @@ profiling/peak_mem.py and merged in here from --peak-mem-json. It is the number 
 sweep plots: nvidia-smi cannot see inside AlphaFold3's preallocated arena, and this
 can. Missing (null) when the run was killed before the counter could be read.
 
-WHAT model_time_s IS. The engine's own timer, the same definition stage 04 uses so
-the two are comparable:
-  af3   "Featurising data ... took X seconds" + "Running model inference ... took Y"
-  of3   runtime_s from each seed's timing.json, summed (--timing-glob)
-It excludes interpreter start, container start and parameter loading; wall_time_s
-includes them.
+WHAT model_time_s IS. Featurisation + inference of this query, excluding interpreter
+start, container start and parameter loading; wall_time_s includes those.
+
+  af3   "Featurising data ... took X seconds" + "Running model inference ... took Y",
+        both from AlphaFold3's own log.
+  of3   featurisation_s + compute_s from profiling/peak_mem.py's predict timeline.
+
+The of3 side used to be runtime_s from each seed's timing.json (--timing-glob), which
+OpenFold3 writes itself. That number is its predict loop ONLY: the features are built in
+the DataLoader before the loop starts, so featurisation was in the AlphaFold3 number and
+not in the OpenFold3 one, and the gap grows with input size -- 55 s of it at 5000 tokens,
+against a 510 s measurement. Rows produced that way are still read (model_source says
+which), but the two engines are only comparable on rows that carry the timeline.
+
+`compute_s` is the same window OpenFold3 times itself, so of3_runtime_s is kept beside it
+as a cross-check: the two should agree within a second.
 """
 
 import argparse
@@ -135,6 +145,33 @@ def parse_model_time(engine: str, log_path: str, timing_glob: str) -> float | No
         return None
     return round((float(feat.group(1)) if feat else 0.0)
                  + (float(infer.group(1)) if infer else 0.0), 3)
+
+
+def model_time(engine: str, log_path: str, timing_glob: str, peak_mem: dict,
+               status: str) -> dict:
+    """model_time_s and the fields saying how it was arrived at.
+
+    For of3 the timeline peak_mem.py recorded is preferred, because it is the only
+    measurement that includes featurisation and so the only one comparable with the
+    AlphaFold3 log. OpenFold3's own runtime_s is kept beside it: it should equal
+    compute_s, and a disagreement means the callback missed a batch."""
+    if status != "ok":
+        return {"model_time_s": None, "model_source": None}
+    engine_timer = parse_model_time(engine, log_path, timing_glob)
+    if engine != "of3":
+        return {"model_time_s": engine_timer, "model_source": "af3 log (featurise+inference)"}
+    feat, compute = peak_mem.get("featurisation_s"), peak_mem.get("compute_s")
+    if isinstance(feat, (int, float)) and isinstance(compute, (int, float)):
+        return {"model_time_s": round(feat + compute, 3),
+                "model_source": "of3 predict timeline (featurise+compute)",
+                "featurisation_s": feat,
+                "compute_s": compute,
+                "featurisation_is_lower_bound": peak_mem.get("featurisation_is_lower_bound"),
+                "of3_runtime_s": engine_timer}
+    # No timeline: OpenFold3's own timer, which leaves featurisation out.
+    return {"model_time_s": engine_timer,
+            "model_source": "of3 timing.json (predict loop only, no featurisation)",
+            "of3_timeline_error": peak_mem.get("of3_timeline_error")}
 
 
 KIT_PARTIAL_RE = re.compile(r"DONE status=partial .*predictions=(\d+)/\1\b.*levers_short")
@@ -257,8 +294,7 @@ def main() -> int:
         "gpu_total_mib": gpu_total,
         "wall_time_s": int(time.time() - start),
         # Only for a run that produced a result: a failed run still prints timers.
-        "model_time_s": (parse_model_time(args.engine, infer_log, args.timing_glob)
-                         if status == "ok" else None),
+        **model_time(args.engine, infer_log, args.timing_glob, peak_mem, status),
         "exit_code": exit_code,
         "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
     }

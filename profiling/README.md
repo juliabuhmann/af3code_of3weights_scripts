@@ -30,6 +30,29 @@ time figure in the same directory, `runtime_vs_tokens.png`, shows the two engine
 over between 1000 and 1500 tokens — OpenFold3 is faster below that and slower above it,
 the same crossover the Benchmark-IV runtimes show.
 
+## What "model time" means
+
+Featurisation + inference of one query, excluding interpreter start, container start and
+parameter loading; `wall_s` carries those. AlphaFold 3 reports the two parts in its own log
+and the sweep adds them. OpenFold3 reports only its predict loop (`runtime_s` per seed),
+which does NOT include featurisation: the features are built in the DataLoader before that
+loop begins, and on this grid the difference grows with size -- 55 s of it at 5000 tokens,
+beside a 510 s measurement.
+
+`profiling/peak_mem.py` therefore times OpenFold3's featurisation itself. It runs the engine
+in-process, so a Lightning callback of ours attaches to whatever Trainer the runner builds
+and records the gaps the predict loop spends waiting for data (`featurisation_s`) and the
+time inside batches (`compute_s`); `model_s` is their sum. Nothing in OpenFold3 or in the kit
+is patched, and `compute_s` should equal OpenFold3's own `runtime_s`, which is kept beside it
+as a cross-check. DataLoader workers would overlap the fetch with the compute and make
+`featurisation_s` a lower bound, so `num_workers` is recorded and the profiling runner yamls
+set it to 0.
+
+The `model_source` column says which definition a row carries. Rows swept before this
+existed hold OpenFold3's own timer, and a figure drawn from them says so under its title:
+the speed-ups read off them flatter the OpenFold3 side, and the arms need re-sweeping for
+like-for-like numbers.
+
 ## What is measured
 
 One arm per sweep, taken from the repository's own arm configs, so the sweep runs the
@@ -267,7 +290,7 @@ accumulates and no figure outlives the table beside it:
 | file | what |
 |---|---|
 | `vram_vs_tokens.png` | peak memory vs tokens, absolute |
-| `runtime_vs_tokens.png` | model time vs tokens, absolute. Where a set names a `speedup_at` token count, each arm's marker at that size is labelled with its speed-up over the baseline -- 5,000 tokens for `of3kit_rtxpro6000`, the size the pooled scheme actually runs |
+| `runtime_vs_tokens.png` | model time (featurisation + inference) vs tokens, absolute. Where a set names a `speedup_at` token count, each arm's marker at that size is labelled with its speed-up over the baseline -- 5,000 tokens for `of3kit_rtxpro6000`, the size the pooled scheme actually runs |
 | `ratio_vs_tokens.png` | every arm **relative to the production engine** on that card: speed-up (baseline time / arm time, >1 faster) and peak memory as a fraction of the baseline's (<1 less), at the token counts both ran. Sweeps with a baseline only |
 | `metrics.tsv` | every plotted row, host columns dropped |
 | `manifest.json` | the arms in legend order, the baseline, each arm's source table and row count, the figures written, the commit that drew them |

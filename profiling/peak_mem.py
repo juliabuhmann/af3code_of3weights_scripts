@@ -43,8 +43,95 @@ Usage — everything after `--` is passed to the target unchanged:
 import json
 import runpy
 import sys
+import time
 
 MIB = 1024 * 1024
+
+# --------------------------------------------------------------- OF3 predict timeline
+#
+# WHY. OpenFold3's own timer (runtime_s in each seed's timing.json) starts when Lightning
+# hands the model a batch and stops when the batch is done. Producing that batch -- parsing
+# the MSA, building the template and token features -- happens in the DataLoader BEFORE
+# that clock starts, so it is not in the number. AlphaFold3's log reports featurisation and
+# inference separately and the sweep adds them, so the two engines' "model time" did not
+# mean the same thing, and the difference grows with input size (55 s of it at 5000 tokens).
+#
+# The fix is measured, not estimated: a Lightning callback of ours, attached to whatever
+# Trainer the runner builds, times the gaps the loop spends waiting for data and the time
+# it spends inside batches. `compute_s` is the same window OpenFold3 times itself, so a row
+# where the two disagree is a sign this instrumentation did not see every batch.
+#
+# It measures what it can see: with DataLoader workers the fetch overlaps the compute and
+# the gap understates the work, so `num_workers` is recorded beside it and anything other
+# than 0 makes `featurisation_s` a lower bound. The profiling runner yamls set it to 0.
+TIMELINE: dict = {"featurisation_s": 0.0, "compute_s": 0.0, "batches": 0,
+                  "num_workers": None, "attached": False}
+
+
+def install_of3_timeline() -> None:
+    """Attach a predict-timeline callback to every Lightning Trainer this process builds.
+
+    Patching the constructor rather than the runner keeps this out of OpenFold3 and out of
+    the kit: neither knows it is being timed, and the sweep runs the same code path it
+    would have run anyway. A failure to attach is recorded and never raised -- an engine
+    that still produces its structures is worth more than an instrumented crash."""
+    try:
+        import pytorch_lightning as pl
+        from pytorch_lightning.callbacks import Callback
+    except Exception as exc:                        # noqa: BLE001 - recorded, not raised
+        TIMELINE["error"] = f"pytorch_lightning not importable: {type(exc).__name__}"
+        return
+
+    class PredictTimeline(Callback):
+        def __init__(self) -> None:
+            self.mark = None
+
+        def on_predict_start(self, trainer, pl_module) -> None:
+            self.mark = time.perf_counter()
+            loaders = getattr(trainer, "predict_dataloaders", None)
+            loader = loaders[0] if isinstance(loaders, (list, tuple)) and loaders else loaders
+            TIMELINE["num_workers"] = getattr(loader, "num_workers", None)
+
+        def on_predict_batch_start(self, trainer, pl_module, batch, batch_idx,
+                                   dataloader_idx=0) -> None:
+            now = time.perf_counter()
+            if self.mark is not None:               # the loop waiting for the DataLoader
+                TIMELINE["featurisation_s"] += now - self.mark
+            self.mark = now
+
+        def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx,
+                                 dataloader_idx=0) -> None:
+            now = time.perf_counter()
+            if self.mark is not None:               # the model on this batch
+                TIMELINE["compute_s"] += now - self.mark
+            self.mark = now
+            TIMELINE["batches"] += 1
+
+    original = pl.Trainer.__init__
+
+    def patched(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        try:
+            self.callbacks.append(PredictTimeline())
+            TIMELINE["attached"] = True
+        except Exception as exc:                    # noqa: BLE001 - recorded, not raised
+            TIMELINE["error"] = f"could not attach the callback: {type(exc).__name__}: {exc}"
+
+    pl.Trainer.__init__ = patched
+
+
+def timeline_payload() -> dict:
+    """The timeline as result fields, or {} when nothing was timed."""
+    if not TIMELINE["batches"]:
+        return {"of3_timeline_error": TIMELINE.get("error", "no predict batch was timed")}
+    return {
+        "featurisation_s": round(TIMELINE["featurisation_s"], 3),
+        "compute_s": round(TIMELINE["compute_s"], 3),
+        "timeline_batches": TIMELINE["batches"],
+        "timeline_num_workers": TIMELINE["num_workers"],
+        # A lower bound rather than a measurement when the fetch ran in worker processes.
+        "featurisation_is_lower_bound": bool(TIMELINE["num_workers"]),
+    }
 
 
 def read_af3_stats() -> dict:
@@ -89,6 +176,8 @@ def dump(out_path: str, engine: str) -> None:
                               if isinstance(reserved, (int, float)) else None),
         "raw": stats,
     }
+    if engine == "of3":
+        payload.update(timeline_payload())
     try:
         with open(out_path, "w") as fh:
             json.dump(payload, fh, indent=2)
@@ -120,6 +209,9 @@ def main() -> int:
         print("usage: peak_mem.py --out PATH --engine af3|of3 "
               "(--script PATH | --module NAME) -- ARGS...", file=sys.stderr)
         return 2
+
+    if engine == "of3":
+        install_of3_timeline()
 
     # The target must see the argv it would have seen if it had been invoked directly.
     sys.argv = [script or module, *rest]

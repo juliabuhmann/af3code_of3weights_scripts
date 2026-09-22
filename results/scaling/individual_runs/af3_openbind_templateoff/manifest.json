@@ -19,7 +19,11 @@
     "vram_vs_tokens.png"
   ],
   "script": "profiling/plot_vram.py",
-  "git_commit": "6030812+dirty",
+  "git_commit": "665e553+dirty",
   "metric": "peak_alloc_gib",
-  "speedup_at_tokens": null
+  "speedup_at_tokens": null,
+  "model_sources": {
+    "af3_openbind_templateoff": "(not recorded)"
+  },
+  "model_time_definitions_mixed": false
 }

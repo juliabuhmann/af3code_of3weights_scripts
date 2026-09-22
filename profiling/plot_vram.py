@@ -250,6 +250,31 @@ def annotate_speedup(ax, arms: list[Arm], baseline: Arm | None, at_tokens: int |
               f"{base / value:.2f}x the baseline's {base:.0f} s")
 
 
+# An of3 row whose model time came from OpenFold3's own timer covers its predict loop and
+# not the featurisation before it, while every af3 row includes featurisation. Such a row
+# is still plotted -- it is the measurement that exists -- but the figure says so, because
+# a speed-up read off it flatters the OpenFold3 side.
+TIMELINE_SOURCE = "of3 predict timeline"
+MIXED_NOTE = ("OpenFold3 times its predict loop only: featurisation is in the AlphaFold 3 "
+              "times and not in theirs. Re-sweep for like-for-like numbers.")
+
+
+def model_sources(arms: list[Arm]) -> dict[str, str]:
+    return {a.name: next((r.get("model_source", "") for r in a.ok if r.get("model_source")),
+                         "" if any("model_source" in r for r in a.rows) else "(not recorded)")
+            for a in arms}
+
+
+def mixed_definitions(arms: list[Arm]) -> bool:
+    """True when an of3 arm's model time leaves featurisation out while an af3 arm's does not."""
+    engines = {a.first("engine") for a in arms}
+    if "af3" not in engines:
+        return False
+    sources = model_sources(arms)
+    return any(a.first("engine") == "of3" and not sources[a.name].startswith(TIMELINE_SOURCE)
+               for a in arms)
+
+
 def plot_runtime(arms: list[Arm], out: Path, title: str | None, baseline: Arm | None = None,
                  at_tokens: int | None = None) -> Path | None:
     fig, ax = plt.subplots(figsize=(9.0, 5.8))
@@ -262,7 +287,11 @@ def plot_runtime(arms: list[Arm], out: Path, title: str | None, baseline: Arm | 
     annotate_speedup(ax, arms, baseline, at_tokens)
     ax.set_xlabel(X_LABEL)
     ax.set_ylabel("Model time (s)")
-    fl.title(ax, "Model time vs complex size", title)
+    subtitle = title
+    if mixed_definitions(arms):
+        subtitle = f"{title}\n{MIXED_NOTE}" if title else MIXED_NOTE
+        print(f"  [WARN] {MIXED_NOTE}")
+    fl.title(ax, "Model time vs complex size", subtitle)
     ax.set_ylim(bottom=0)
     if len(arms) > 1:
         fl.outside_legend(ax)
@@ -341,7 +370,9 @@ def write_directory(arms: list[Arm], out: Path, *, metric: str, baseline: Arm | 
     fl.write_manifest(out, experiment=EXPERIMENT, script=SCRIPT, set_name=set_name, title=title,
                       arms=[a.name for a in arms], baseline=baseline.name if baseline else None,
                       sources=sources_of(arms, sweep_dir), figures=figures, missing=missing,
-                      extra={"metric": metric, "speedup_at_tokens": at_tokens})
+                      extra={"metric": metric, "speedup_at_tokens": at_tokens,
+                             "model_sources": model_sources(arms),
+                             "model_time_definitions_mixed": mixed_definitions(arms)})
     return ratio_table
 
 

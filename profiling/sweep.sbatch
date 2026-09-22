@@ -84,8 +84,21 @@ MANIFEST="$INPUT_DIR/pool_manifest.tsv"
 
 mkdir -p "$OUT_DIR"
 TABLE="$OUT_DIR/vram_sweep.tsv"
-COLUMNS="arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver	node	slurm_job_id"
-[[ -f "$TABLE" ]] || printf '%s\n' "$COLUMNS" > "$TABLE"
+COLUMNS="arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	featurisation_s	model_source	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver	node	slurm_job_id"
+if [[ -f "$TABLE" ]]; then
+    # A table written before featurisation_s/model_source existed holds model times that
+    # mean something different for of3 (its predict loop, without featurisation). Appending
+    # a wider row to it would put every later field under the wrong heading and mix two
+    # definitions in one column, so the sweep stops and says what to do.
+    if [[ "$(head -1 "$TABLE")" != "$COLUMNS" ]]; then
+        echo "ERROR: $TABLE was written with a different column set." >&2
+        echo "       Move it aside and re-sweep this arm:" >&2
+        echo "         mkdir -p $OUT_DIR/_superseded && mv $TABLE $OUT_DIR/pool_* $OUT_DIR/_superseded/" >&2
+        exit 1
+    fi
+else
+    printf '%s\n' "$COLUMNS" > "$TABLE"
+fi
 
 # Node-local scratch, shared by every size this job runs — which is what keeps the
 # compiled-kernel caches warm across the sweep, as in the two prediction launchers.
@@ -415,6 +428,8 @@ row = [arm, engine, weights,
        str(r.get("gpu_total_mib") or ""),
        str(r.get("wall_time_s") or ""),
        "" if r.get("model_time_s") is None else f"{r['model_time_s']:.1f}",
+       "" if r.get("featurisation_s") is None else f"{r['featurisation_s']:.1f}",
+       str(r.get("model_source") or ""),
        str(r.get("exit_code", "")), samples, recycles,
        mem_fraction if engine == "af3" else "",
        gpu, driver, node, r.get("slurm_job_id", "")]

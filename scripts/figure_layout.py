@@ -241,10 +241,11 @@ def title(ax, headline: str, subtitle: str | None = None) -> None:
     The set's title says which arms are being compared; it does not say what the figure
     plots, and reusing it as the title left memory and runtime figures that could only be
     told apart by their axes. The headline names the measurement, the subtitle the set."""
-    ax.set_title(headline, pad=28 if subtitle else 12)
+    lines = 1 + (subtitle.count("\n") if subtitle else 0)
+    ax.set_title(headline, pad=14 + 16 * lines if subtitle else 12)
     if subtitle:
         ax.text(0.0, 1.015, subtitle, transform=ax.transAxes, va="bottom", ha="left",
-                fontsize=11.5, color=INK_TEXT)
+                fontsize=11.5, color=INK_TEXT, linespacing=1.35)
 
 
 SEPARATOR = " / "
