@@ -26,8 +26,8 @@
     "gpu": "nvidia_rtx_pro_6000:1",
     "gpumem": "90g",
     "cpus": 8,
-    "mem_per_cpu": "8g",
-    "time": "4:00:00"
+    "mem_per_cpu": "16g",
+    "time": "24:00:00"
   },
   "notes": [
     "mode fast: fused Triton pair-stack kernels and bf16 in the diffusion roll-out, trunk hand-off and",
@@ -60,6 +60,12 @@
     "every other arm as it was.",
     "",
     "use_templates=false for the same reason as the of3 arm: the converted queries carry none.",
-    "Recycles: OpenFold3's fixed 3, as for of3. Samples and seed as the other arms."
+    "Recycles: OpenFold3's fixed 3, as for of3. Samples and seed as the other arms.",
+    "",
+    "128 GB of host memory (8 x 16g) and 24 h, matching the `big` arms. The first sweep of this",
+    "arm ran with 64 GB and 4 h, before the host-memory accounting existed; the rows it produced",
+    "are superseded. The reach gate plays no part here -- modes.REACH_LINES is (('big',",
+    "'resident'),) only -- so this arm's GPU OOM at 4500 tokens (91 GiB reached on a 96 GiB card)",
+    "is a real memory boundary and a re-run is expected to reproduce it."
   ]
 }

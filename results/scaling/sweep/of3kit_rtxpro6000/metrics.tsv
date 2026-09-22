@@ -11,14 +11,6 @@ af3_openbind_templateoff	af3	openbind	false	4500	18	ok	57269.0	55.93	92388.0	930
 af3_openbind_templateoff	af3	openbind	false	5000	20	ok	70304.6	68.66	92388.0	93015	90.83	97887	855	834.8	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
 af3_openbind_templateoff	af3	openbind	false	5500	22	ok	80866.7	78.97	92388.0	93015	90.83	97887	1023	1001.4	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
 af3_openbind_templateoff	af3	openbind	false	6000	24	gpu_oom	89694.0	87.59	92388.0	92995	90.82	97887	138		1	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3_openbind_templateoff	of3	openbind	false	500	2	ok	4368.8	4.27	4658.0	5377	5.25	97887	122	31.3	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3_openbind_templateoff	of3	openbind	false	1000	4	ok	12286.2	12.00	12836.0	13555	13.24	97887	99	64.1	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3_openbind_templateoff	of3	openbind	false	1500	6	ok	19588.3	19.13	20372.0	20619	20.14	97887	160	133.2	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3_openbind_templateoff	of3	openbind	false	2000	8	ok	30489.6	29.77	30994.0	31713	30.97	97887	266	235.7	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3_openbind_templateoff	of3	openbind	false	2500	10	ok	43298.0	42.28	45454.0	46173	45.09	97887	410	375.3	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3_openbind_templateoff	of3	openbind	false	3000	12	ok	58381.1	57.01	61114.0	61833	60.38	97887	603	562.9	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3_openbind_templateoff	of3	openbind	false	3500	14	ok	78837.0	76.99	81954.0	82673	80.74	97887	870	825.7	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3_openbind_templateoff	of3	openbind	false	4000	16	gpu_oom	94734.4	92.51	94792.0	95511	93.27	97887	1088		0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
 of3kit_off_templateoff	of3	openbind	false	500	2	ok	11748.3	11.47	12260.0	12925	12.62	97887	32	14.3	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
 of3kit_off_templateoff	of3	openbind	false	1000	4	ok	13741.0	13.42	15460.0	16125	15.75	97887	70	49.1	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
 of3kit_off_templateoff	of3	openbind	false	1500	6	ok	24464.4	23.89	25660.0	26325	25.71	97887	143	118.2	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
@@ -27,32 +19,6 @@ of3kit_off_templateoff	of3	openbind	false	2500	10	ok	58571.4	57.20	61736.0	62401
 of3kit_off_templateoff	of3	openbind	false	3000	12	ok	58376.7	57.01	63776.0	64441	62.93	97887	575	538.0	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
 of3kit_off_templateoff	of3	openbind	false	3500	14	ok	78831.9	76.98	83854.0	84519	82.54	97887	856	813.9	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
 of3kit_off_templateoff	of3	openbind	false	4000	16	gpu_oom	94728.5	92.51	95012.0	95675	93.43	97887	1206		0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_exact_templateoff	of3	openbind	false	500	2	ok	13002.4	12.70	13878.0	14617	14.27	97887	26	9.7	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_exact_templateoff	of3	openbind	false	1000	4	ok	14008.6	13.68	14386.0	15121	14.77	97887	53	34.6	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_exact_templateoff	of3	openbind	false	1500	6	ok	24732.0	24.15	25926.0	26661	26.04	97887	103	79.7	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_exact_templateoff	of3	openbind	false	2000	8	ok	40534.5	39.58	42010.0	42745	41.74	97887	188	161.2	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_exact_templateoff	of3	openbind	false	2500	10	ok	58839.0	57.46	62038.0	62771	61.30	97887	291	259.0	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_exact_templateoff	of3	openbind	false	3000	12	ok	58644.3	57.27	64100.0	64833	63.31	97887	531	494.6	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_exact_templateoff	of3	openbind	false	3500	14	ok	79099.5	77.25	84120.0	84853	82.86	97887	786	744.4	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_exact_templateoff	of3	openbind	false	4000	16	gpu_oom	94996.2	92.77	95298.0	96031	93.78	97887	1134		1	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_fast_templateoff	of3	openbind	false	500	2	ok	8560.6	8.36	11550.0	16417	16.03	97887	23	6.7	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_fast_templateoff	of3	openbind	false	1000	4	ok	12864.1	12.56	19040.0	22029	21.51	97887	37	18.1	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_fast_templateoff	of3	openbind	false	1500	6	ok	20683.6	20.20	25042.0	29907	29.21	97887	61	37.0	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_fast_templateoff	of3	openbind	false	2000	8	ok	35519.6	34.69	39212.0	44073	43.04	97887	91	62.2	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_fast_templateoff	of3	openbind	false	2500	10	ok	36500.8	35.65	38764.0	43503	42.48	97887	133	101.4	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_fast_templateoff	of3	openbind	false	3000	12	ok	48525.9	47.39	55224.0	60085	58.68	97887	186	148.7	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_fast_templateoff	of3	openbind	false	3500	14	ok	64739.3	63.22	67804.0	62207	60.75	97887	254	211.4	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_fast_templateoff	of3	openbind	false	4000	16	ok	83522.1	81.56	83804.0	76809	75.01	97887	331	282.9	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_fast_templateoff	of3	openbind	false	4500	18	gpu_oom	82644.3	80.71	92254.0	91287	89.15	97887	359		1	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_big_templateoff	of3	openbind	false	500	2	ok	8560.6	8.36	11550.0	16417	16.03	97887	24	7.0	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_big_templateoff	of3	openbind	false	1000	4	ok	12864.1	12.56	19040.0	22029	21.51	97887	39	19.0	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_big_templateoff	of3	openbind	false	1500	6	ok	18805.0	18.36	22312.0	27177	26.54	97887	76	50.0	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_big_templateoff	of3	openbind	false	2000	8	ok	22474.9	21.95	25706.0	26505	25.88	97887	112	80.3	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_big_templateoff	of3	openbind	false	2500	10	ok	24380.5	23.81	24950.0	25749	25.15	97887	172	135.2	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_big_templateoff	of3	openbind	false	3000	12	ok	37263.3	36.39	38486.0	39301	38.38	97887	239	194.9	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_big_templateoff	of3	openbind	false	3500	14	ok	42691.8	41.69	44046.0	44863	43.81	97887	325	275.1	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_big_templateoff	of3	openbind	false	4000	16	ok	49881.3	48.71	52108.0	52939	51.70	97887	416	354.9	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
-of3kit_big_templateoff	of3	openbind	false	4500	18	error				49751	48.58	97887	4535		-9	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
 of3kit_big_reachoff_templateoff	of3	openbind	false	500	2	ok	8560.6	8.36	11550.0	16417	16.03	97887	23	6.1	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
 of3kit_big_reachoff_templateoff	of3	openbind	false	1000	4	ok	12864.1	12.56	19020.0	22029	21.51	97887	35	15.1	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
 of3kit_big_reachoff_templateoff	of3	openbind	false	1500	6	ok	18805.0	18.36	22312.0	27177	26.54	97887	68	41.6	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04

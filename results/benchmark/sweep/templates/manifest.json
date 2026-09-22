@@ -29,6 +29,6 @@
     "runtime_vs_size.png"
   ],
   "script": "scripts/06_plot_comparison.py",
-  "git_commit": "4a83b3d+dirty",
+  "git_commit": "daf744d+dirty",
   "runtime_column": "model_s"
 }
