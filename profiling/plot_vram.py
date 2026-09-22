@@ -222,7 +222,10 @@ def annotate_speedup(ax, arms: list[Arm], baseline: Arm | None, at_tokens: int |
         # A ring in the surface colour lifts the labelled point off its curve.
         ax.plot([at_tokens], [value], marker=fl.MARKER, ms=11, color=arm.style["color"],
                 markeredgecolor="white", markeredgewidth=2.5, zorder=5)
-        ax.annotate(f"{base / value:.2f}x faster than\n{baseline.label}  ({base:.0f} s)",
+        # Both times, this arm's first: a ratio alone hides whether it is 5 s against 8 s
+        # or 510 s against 835 s, and the second reading is the one that decides anything.
+        ax.annotate(f"{base / value:.2f}x faster than\n{baseline.label}  "
+                    f"({value:.0f} s / {base:.0f} s)",
                     xy=(at_tokens, value), xytext=(12, -6), textcoords="offset points",
                     va="top", ha="left", fontsize=11, color=fl.INK_TEXT)
         print(f"  {arm.name}: {value:.0f} s at {at_tokens:,} tokens, "
