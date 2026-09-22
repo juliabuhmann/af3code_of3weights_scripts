@@ -137,6 +137,7 @@ def parse_model_time(engine: str, log_path: str, timing_glob: str) -> float | No
                  + (float(infer.group(1)) if infer else 0.0), 3)
 
 
+KIT_PARTIAL_RE = re.compile(r"DONE status=partial .*predictions=(\d+)/\1\b.*levers_short")
 KIT_PEAK_RE = re.compile(r"PEAK-NOTE scope=pass status=ok peak_alloc_gib=([\d.]+)(?: kind=(\S+))?")
 
 
@@ -177,6 +178,11 @@ def classify(log_path: str, exit_code: int, summary_path: str) -> str:
             summary = ""
         if re.search(r"Failed Queries:\s+[1-9]", summary):
             return "failed"
+    if exit_code == 3 and KIT_PARTIAL_RE.search(text):
+        # Anthropic's af3_jax kit: every prediction written, but a lever of the mode engaged at no
+        # call site for this input (its DONE line: status=partial ... levers_short=<names>). The
+        # kit signals that with exit 3 by design; for a sweep it is a successful, measured run.
+        return "ok"
     if exit_code != 0:
         return "error"
     return "ok"

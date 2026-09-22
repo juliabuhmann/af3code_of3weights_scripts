@@ -53,8 +53,8 @@
 #   NUM_DIFFUSION_SAMPLES NUM_RECYCLES TIME_BUDGET_S PER_SIZE_RESERVE_S MAX_TOKENS
 #   MEM_FRACTION (af3, default 0.95)
 #   WARMUP_RUNS (default 0: untimed runs of each size before the recorded one)
-#   af3: MODEL_DIR OF3_WEIGHTS + IMAGE (production image) OR KIT_KIND KIT_DIR KIT_ENV KIT_REPO KIT_CONFIG
-#        KIT_MODE KIT_VARIANT KIT_LEVERS_OFF KIT_ENV_VARS KIT_LD (Anthropic's af3_jax kit; configs/af3kit_*.json)
+#   af3: MODEL_DIR OF3_WEIGHTS + IMAGE (production image) OR KIT_KIND KIT_IMAGE KIT_CONFIG KIT_MODE
+#        KIT_VARIANT KIT_LEVERS_OFF KIT_ENV_VARS (Anthropic's af3_jax kit from its image; configs/af3kit_*.json)
 #   of3: CKPT RUNNER_YAML, then EITHER OF3_SRC OF3_ENV (a source checkout in its own env)
 #        OR KIT_KIND KIT_DIR KIT_ENV KIT_CONFIG KIT_MODE KIT_LEVERS_OFF KIT_CUDA_HOME KIT_LD KIT_ENV_VARS
 #        (Anthropic's openfold3_ob0 kit; configs/of3kit_*.json, profiling/setup_kit_env.sh)
@@ -122,30 +122,32 @@ af3)
     [[ -f "$STRIPPER" ]] || { echo "ERROR: no such file: $STRIPPER" >&2; exit 1; }
     cp "$REPO_DIR/profiling/peak_mem.py" "$SCRATCH/peak_mem.py"
     if [[ -n "${KIT_KIND:-}" ]]; then
-        # Anthropic's af3_jax kit (configs/af3kit_*.json, profiling/setup_af3kit_env.sh). The kit's
-        # `-m` route activates from its source trees on PYTHONPATH; no install. AF3_JAX_REPO must be
-        # WRITABLE (a kit mode copies run_alphafold_fast.py beside run_alphafold.py), so the repo
-        # copy is staged into scratch per job. The kit fills the three XLA variables only where
-        # unset and keeps a caller's value, so the arena settings above stay in force.
-        : "${KIT_DIR:?}" "${KIT_ENV:?}" "${KIT_REPO:?}" "${KIT_MODE:?}"
-        export PATH="$KIT_ENV/bin:$PATH"
-        # A libstdc++ the venv can rely on. AlphaFold3's compiled extension (and opt_core's
-        # prebuilt kernels) need GLIBCXX_3.4.32, i.e. GCC 13's runtime, and Euler's GPU nodes are
-        # not uniform: the same five arms submitted together landed on eu-a65-05 (new enough, ran
-        # the whole ladder) and eu-ts-01 (older, ImportError at the first import, every size
-        # "error"). The image-based arms are immune because the container carries its own. Newer
-        # is backward compatible, so prepending is safe.
-        [[ -n "${KIT_LD:-}" ]] && export LD_LIBRARY_PATH="$KIT_LD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-        export PYTHONPATH="$KIT_DIR/opt:$KIT_DIR/../common/opt_core${PYTHONPATH:+:$PYTHONPATH}"
-        export MODEL_OPT="$KIT_DIR" AF3_JAX_PY="$KIT_ENV/bin/python" PYTHONHASHSEED=0
-        export AF3_JAX_REPO="$SCRATCH/af3_repo"; mkdir -p "$AF3_JAX_REPO"; cp "$KIT_REPO"/*.py "$AF3_JAX_REPO/"
-        export AF3_JAX_CACHE_ROOT="$SCRATCH/af3_jax_cache"; mkdir -p "$AF3_JAX_CACHE_ROOT"
-        if [[ -n "${KIT_ENV_VARS:-}" ]]; then IFS=';' read -ra _kv <<< "$KIT_ENV_VARS"; for kv in "${_kv[@]}"; do export "$kv"; done; fi
-        source "$KIT_DIR/configs/${KIT_CONFIG:-a100}.env"
-        [[ -n "${KIT_LEVERS_OFF:-}" && "$KIT_MODE" != "off" ]] && export MODEL_OPT_LEVERS_OFF="$KIT_LEVERS_OFF"
+        # Anthropic's af3_jax kit from its own container image (configs/af3kit_*.json). The image
+        # (the kit's environment/Dockerfile, built by the fork's GitHub Action) holds the stock venv,
+        # the kit venv first on PATH and the pinned checkout at /app/alphafold, so the host adds
+        # nothing: no venv, no libstdc++, no PYTHONPATH. Caches go to node-local scratch -- the
+        # image's /opt/jit_cache is empty and read-only, and run.sh refuses an NFS cache root. The
+        # kit fills the three XLA variables only where unset, so the arena settings passed with
+        # --env stay in force. launcher.env (KEY=VALUE;...) rides in as --env too.
+        : "${KIT_IMAGE:?}" "${KIT_MODE:?}"
+        [[ -f "$KIT_IMAGE" ]] || { echo "ERROR: kit image not found: $KIT_IMAGE" >&2; exit 1; }
+        KIT_EXEC=(singularity exec --nv
+                  --bind "$INPUT_DIR:$INPUT_DIR"
+                  --bind "$SCRATCH:$SCRATCH"
+                  --env "TMPDIR=$SCRATCH/tmp"
+                  --env "XLA_PYTHON_CLIENT_PREALLOCATE=true"
+                  --env "XLA_CLIENT_MEM_FRACTION=$MEM_FRACTION"
+                  --env "AF3_JAX_CACHE_ROOT=$SCRATCH/af3_jax_cache"
+                  --env "AF3_JAX_PARAMS_ROOT=$(dirname "$MODEL_DIR")"
+                  "${MODEL_BIND[@]}")
+        [[ -n "${KIT_LEVERS_OFF:-}" && "$KIT_MODE" != "off" ]] && KIT_EXEC+=(--env "MODEL_OPT_LEVERS_OFF=$KIT_LEVERS_OFF")
+        if [[ -n "${KIT_ENV_VARS:-}" ]]; then IFS=';' read -ra _kv <<< "$KIT_ENV_VARS"; for kv in "${_kv[@]}"; do KIT_EXEC+=(--env "$kv"); done; fi
+        KIT_EXEC+=("$KIT_IMAGE" bash /kit/af3_jax/run.sh)
+        KIT_ARGS=(--config "${KIT_CONFIG:-a100}" --variant "${KIT_VARIANT:-p2}" --mode "$KIT_MODE")
+        mkdir -p "$SCRATCH/af3_jax_cache" "$SCRATCH/tmp"
         # The kit's dry run: exit 3 = the mode cannot engage on this GPU/stack (NOT ACTIVE, named);
         # 0 = ACTIVE. Gate on that code -- the kit prints to stderr, so a grep of stdout is empty.
-        if ! python -m af3_jax_opt check --mode "$KIT_MODE" --variant "${KIT_VARIANT:-p2}" --model_dir "$MODEL_DIR" > "$SCRATCH/kit_check.log" 2>&1; then
+        if ! "${KIT_EXEC[@]}" check "${KIT_ARGS[@]}" > "$SCRATCH/kit_check.log" 2>&1; then
             cat "$SCRATCH/kit_check.log" >&2; echo "ERROR: the kit refuses mode $KIT_MODE here (above)" >&2; exit 1
         fi
         grep -E "ACTIVE mode=|WEIGHTS" "$SCRATCH/kit_check.log" | cut -c1-200
@@ -208,7 +210,7 @@ echo "engine        : $ENGINE   weights: $WEIGHTS   use_templates: $USE_TEMPLATE
 echo "inputs        : $POOL_DIR"
 echo "table         : $TABLE"
 echo "samples       : $NUM_DIFFUSION_SAMPLES   recycles: $NUM_RECYCLES   warmup runs: $WARMUP_RUNS"
-[[ -n "${KIT_KIND:-}" ]] && echo "launcher      : $KIT_KIND  mode=$KIT_MODE  levers_off=${MODEL_OPT_LEVERS_OFF:-none}  card file=${KIT_CONFIG:-h100}.env  kit=$KIT_DIR"
+[[ -n "${KIT_KIND:-}" ]] && echo "launcher      : $KIT_KIND  mode=$KIT_MODE  levers_off=${KIT_LEVERS_OFF:-${MODEL_OPT_LEVERS_OFF:-none}}  card file=${KIT_CONFIG:-h100}.env  kit=${KIT_IMAGE:-$KIT_DIR}"
 [[ "$ENGINE" == "af3" ]] && echo "xla arena     : preallocate=true  mem_fraction=$MEM_FRACTION"
 echo "node          : $(hostname)   gpu: $GPU_NAME   driver: $DRIVER"
 echo "time budget   : ${TIME_BUDGET_S}s   per-size reserve: ${PER_SIZE_RESERVE_S}s"
@@ -252,10 +254,11 @@ run_size() {
             echo "templates   : stripped ($counts)"
         fi
         if [[ -n "${KIT_KIND:-}" ]]; then
-            # The kit's entry point. The model runs in a child process peak_mem.py cannot wrap;
-            # run_with_trace.py reads the kit's PEAK-NOTE line instead (same JAX counter).
+            # The kit's entry point inside its image. The model runs in a child process peak_mem.py
+            # cannot wrap; run_with_trace.py reads the kit's PEAK-NOTE line instead (same JAX counter).
             # --cache_dir is passed to every mode, off included (see the config's notes).
-            cmd=(python -m af3_jax_opt pred --mode "$KIT_MODE" --variant "${KIT_VARIANT:-p2}" --model_dir "$MODEL_DIR"
+            cmd=("${KIT_EXEC[@]}" pred "${KIT_ARGS[@]}"
+                 --model_dir="$MODEL_DIR"
                  --json_path="$input_used"
                  --output_dir="$SCRATCH/out"
                  --cache_dir="$SCRATCH/alphafold_cache"

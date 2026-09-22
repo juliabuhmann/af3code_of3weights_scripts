@@ -179,15 +179,28 @@ OpenFold3 **preview-2** weights. Four arms run it, beside the production engine 
 | `af3kit_big_p2_templateoff_a100` | [`configs/af3kit_big_p2_templateoff_a100.json`](../configs/af3kit_big_p2_templateoff_a100.json) | `pred --mode big` — lowest peak memory |
 
 `engine` stays `af3`: same `af3_pool` inputs, same AlphaFold 3 log timers for `model_s`. The
-`launcher` block selects the kit's venv, card file, variant and mode;
-[`setup_af3kit_env.sh`](setup_af3kit_env.sh) builds every path it names and fetches + converts the
-preview-2 weights through the kit's own installer (digest-checked; the run's `WEIGHTS` line reads
-`pinned`). The kit is not vendored: the clone is pinned by `kit_commit`.
+`launcher` block names the kit's **container image**, card file, variant and mode; the sweep runs
+`singularity exec --nv <image> bash /kit/af3_jax/run.sh pred --mode M` and nothing is built on the
+host. The image is the kit's own `environment/Dockerfile`, built by the `kit image` GitHub Action
+of the fork [juliabuhmann/uplifting-biomolecular-modeling](https://github.com/juliabuhmann/uplifting-biomolecular-modeling)
+(`launcher.kit_commit`; the only change to the release is dropping an optional pre-filled compile
+cache), pushed to `launcher.image_ref` on ghcr and pulled with `apptainer build`. It carries the
+stock venv, the kit venv and the pinned AlphaFold 3 checkout. The preview-2 weights are the kit's
+own `run.sh install --weights` output (`model_dir`), converted and digest-checked once.
 
-**Not yet run.** Every row above was assembled and dry-run on 2026-09-21; no sweep has completed.
-Numbers that exist so far come from single pairs on an A100 outside this harness (kit modes
-`off`, `exact`, `fast` all produced structures; `fast` was 1.36x faster than `off` with four
-inputs in one process and slower with one input per process; see the openbind notes below).
+```bash
+# on a machine with apptainer, once (the package on ghcr must be public):
+apptainer build af3_jax-kit.sif docker://ghcr.io/juliabuhmann/af3_jax-kit:<tag>
+# point launcher.image at the .sif, or export AF3OF3_KIT_IMAGE=/path/to/af3_jax-kit.sif
+```
+
+A first venv-based route (a host venv around the kit, with GLIBCXX and libcifpp workarounds) was
+replaced by the image on 2026-09-22 after it failed on one of two A100 node types; its rows were
+discarded. **No image-based sweep has completed yet.** The image itself was smoke-tested on an A100:
+`off` and `exact` gave the same ipTM on one pair, 5/5 predictions each. Numbers that exist so far
+come from single pairs outside this harness (kit modes `off`, `exact`, `fast` all produced
+structures; `fast` was 1.36x faster than `off` with four inputs in one process and slower with one
+input per process; see the openbind notes below).
 
 Things that shape how the rows must be read:
 
@@ -214,8 +227,11 @@ Things that shape how the rows must be read:
   tables are measured to 1,536 tokens. This sweep is the first measurement above that.
 * **Card.** The kit ships an `a100` card file; its headline is H100. On A100 the kit's README says
   `big` leaves the fused triangle attention and fused transition off.
+* **`fast` may exit 3 on small inputs.** The kit's `DONE status=partial ... levers_short=` line
+  means every prediction was written but one lever engaged at no call site; `run_with_trace.py`
+  records that run as `ok`, the kit's documented meaning of the code.
 * **OpenBind on this kit** needs four one-line changes ([`patches/af3_jax_openbind.diff`](patches/af3_jax_openbind.diff),
-  applied to the clone by the setup script, gated on `of3_openbind`, inert for preview-2): the
+  not in the image, gated on `of3_openbind`, inert for preview-2): the
   kit's vendored `run_alphafold.py` had no openbind switch, and three levers assume preview-2's
   pair-bias axes or per-block pair LayerNorm. Verified on the A100 on one pair: patched `exact` and
   `fast` reproduce stock's ipTM within 0.01 / 0.03; unpatched, `fast` stops on a missing
@@ -224,7 +240,6 @@ Things that shape how the rows must be read:
 
 ```bash
 export AF3OF3_BASE_DIR=/path/to/workdir/af3code_of3weights
-AF3OF3_KIT_ROOT=/path/to/anthropic_kits bash profiling/setup_af3kit_env.sh   # once
 
 for arm in af3_openbind_templateoff_a100 af3kit_off_p2_templateoff_a100 \
            af3kit_exact_p2_templateoff_a100 af3kit_fast_p2_templateoff_a100 af3kit_big_p2_templateoff_a100; do
@@ -232,7 +247,7 @@ for arm in af3_openbind_templateoff_a100 af3kit_off_p2_templateoff_a100 \
 done
 # A job that runs out of wall clock leaves every finished size in <arm>/vram_sweep.tsv; submitting
 # the same line again resumes at the first size not yet recorded.
-pixi run python profiling/plot_vram.py --runtime --arms af3_openbind_templateoff_a100 af3kit_off_p2_templateoff_a100 af3kit_exact_p2_templateoff_a100 af3kit_fast_p2_templateoff_a100 af3kit_big_p2_templateoff_a100 --out profiling/results/a100_kit.png
+pixi run python profiling/plot_vram.py --set af3kit_a100 --runtime --relative      # profiling/results/af3kit_a100/
 ```
 
 ## Where figures go, and the relative view

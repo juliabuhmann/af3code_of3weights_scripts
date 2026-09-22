@@ -7,18 +7,15 @@
   "use_templates": false,
   "launcher": {
     "kind": "af3_jax_kit",
-    "kit_dir": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/shi/anthropic_optimization/uplifting-biomolecular-modeling/af3_jax",
-    "kit_commit": "f4f62fa6592ae4938d49b1757bea0cfeff9f468e",
-    "kit_env": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/shi/anthropic_optimization/venv/af3-jax",
-    "kit_repo": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/shi/anthropic_optimization/af3_repo",
+    "image": "/cluster/project/beltrao/jbuhmann/images/af3_jax-kit.sif",
+    "image_ref": "ghcr.io/juliabuhmann/af3_jax-kit:c8a1147",
+    "kit_commit": "c8a1147",
+    "upstream_commit": "f4f62fa6592ae4938d49b1757bea0cfeff9f468e",
     "kit_config": "a100",
     "variant": "p2",
-    "levers_off": "",
-    "env": {
-      "LIBCIFPP_DATA_DIR": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/shi/anthropic_optimization/venv/af3-jax/share/libcifpp"
-    },
     "mode": "big",
-    "ld_library_path": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/shi/anthropic_optimization/lib-stdcxx"
+    "levers_off": "",
+    "env": {}
   },
   "model_dir": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/shi/anthropic_optimization/weights/af3_jax/p2",
   "of3_weights": true,
@@ -35,28 +32,35 @@
     "partition": "gpupr.4h"
   },
   "notes": [
-    "kit `big`: lowest peak GPU memory; above 1,408 padded tokens the pair stack runs row-sharded with the hoists off",
+    "kit `big`: fast's levers minus the memory-hungry ones (FPF_TRIMUL, FPF_HOIST, HOIST_LOGITS, ATOM_COND_HOIST, TRIMUL_CD off) -- the kit's lowest-peak-memory mode",
     "",
     "Anthropic's af3_jax optimization kit (github.com/anthropics/uplifting-biomolecular-modeling, Apache-2.0,",
     "reference release 2026-09-17, not maintained) on the AlphaFold 3 JAX codebase, with the OpenFold3 PREVIEW-2",
     "weights the kit pins (of3-p2-155k -> of3_ported_weights.bin.zst by the fork's converter; sha256 in the kit's",
-    "stock/PINS.json, checked at every run: the WEIGHTS line reads `pinned`).",
+    "stock/PINS.json).",
     "engine stays `af3`: same codebase, same af3_pool inputs, same log timers as af3_openbind_templateoff_a100.",
-    "Only the launcher differs: launcher.kind af3_jax_kit runs `python -m af3_jax_opt pred --mode M` from the",
-    "kit's venv (profiling/setup_af3kit_env.sh builds every path the block names; the kit is NOT vendored, the",
-    "clone is pinned by kit_commit). Override paths with AF3OF3_KIT_DIR / AF3OF3_KIT_ENV / AF3OF3_KIT_REPO.",
+    "Only the launcher differs: launcher.kind af3_jax_kit runs `run.sh pred --mode M` inside the kit's OWN container",
+    "image (launcher.image; override with AF3OF3_KIT_IMAGE). The image is the kit's environment/Dockerfile built",
+    "unchanged except for dropping an optional pre-filled compile cache, by the 'kit image' GitHub Action of the fork",
+    "juliabuhmann/uplifting-biomolecular-modeling at c8a1147 (upstream release f4f62fa), pushed to",
+    "ghcr.io/juliabuhmann/af3_jax-kit:c8a1147 and pulled with `apptainer build`. It carries the stock venv, the kit venv and the pinned checkout,",
+    "so the host builds nothing; the earlier venv route (GLIBCXX and libcifpp workarounds) is gone.",
+    "Smoke-tested 2026-09-22 on eu-ts-01 (A100): off and exact gave the same ipTM on one pair, both 5/5 predictions.",
     "PEAK MEMORY: a kit mode runs the model in a child process that profiling/peak_mem.py cannot wrap, so",
     "run_with_trace.py reads the kit's own `PEAK-NOTE ... peak_alloc_gib=` line -- jax peak_bytes_in_use, the",
     "same counter peak_mem.py reads for the af3 engine, so the column is comparable across arms.",
     "--cache_dir: the sweep passes ONE node-local cache to every arm and size (as for af3_openbind_*). The kit's",
     "own `off` would run with an empty --cache_dir; a caller's flag rides last and wins, so here off is stock",
     "with the same warm compile cache as the other arms -- comparable within this sweep, not the kit's own off.",
+    "The kit's compile-cache root (AF3_JAX_CACHE_ROOT) is node-local scratch too: the image's /opt/jit_cache is empty.",
     "Every kit mode pays a one-time tokamax autotune attempt per PROCESS (~20 s, the kit's README) that stock",
     "does not; one size per process here, so small sizes are biased against the kit and 5,000 tokens by <3 %.",
+    "Exit 3 with `DONE status=partial ... levers_short=`: every prediction written but a lever engaged nowhere for",
+    "this input; run_with_trace.py records that run as ok (the kit's documented meaning of that code).",
     "Card: A100 80GB (cc 8.0), which the kit ships a card file for. The kit's headline numbers are H100;",
     "on A100 its README says big leaves the fused triangle attention and fused transition off.",
-    "The clone carries profiling/patches/af3_jax_openbind.diff (openbind layout support, gated on",
-    "launcher.ld_library_path: a GCC 13 libstdc++ for the venv. AlphaFold3's compiled extension needs GLIBCXX_3.4.32 and Euler's GPU nodes are not uniform -- the first submission of these arms failed on eu-ts-01 and ran on eu-a65-05. The image-based arms are immune.",
-    "of3_openbind); inert for this arm's preview-2 weights."
+    "OpenBind on this kit needs profiling/patches/af3_jax_openbind.diff (4 files, gated on of3_openbind); the image",
+    "does not carry it, and these arms run preview-2 on purpose, so the kit is measured as shipped first.",
+    "The mode meant for the sizes fast cannot fit; whether it reaches the production scheme's 5,120 tokens on 80 GB, and at what speed relative to off, is what this arm measures."
   ]
 }
