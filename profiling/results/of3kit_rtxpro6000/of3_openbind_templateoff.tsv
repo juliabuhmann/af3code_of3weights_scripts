@@ -1,0 +1,9 @@
+arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver
+of3_openbind_templateoff	of3	openbind	false	500	2	ok	4368.8	4.27	4658.0	5377	5.25	97887	122	31.3	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3_openbind_templateoff	of3	openbind	false	1000	4	ok	12286.2	12.00	12836.0	13555	13.24	97887	99	64.1	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3_openbind_templateoff	of3	openbind	false	1500	6	ok	19588.3	19.13	20372.0	20619	20.14	97887	160	133.2	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3_openbind_templateoff	of3	openbind	false	2000	8	ok	30489.6	29.77	30994.0	31713	30.97	97887	266	235.7	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3_openbind_templateoff	of3	openbind	false	2500	10	ok	43298.0	42.28	45454.0	46173	45.09	97887	410	375.3	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3_openbind_templateoff	of3	openbind	false	3000	12	ok	58381.1	57.01	61114.0	61833	60.38	97887	603	562.9	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3_openbind_templateoff	of3	openbind	false	3500	14	ok	78837.0	76.99	81954.0	82673	80.74	97887	870	825.7	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3_openbind_templateoff	of3	openbind	false	4000	16	gpu_oom	94734.4	92.51	94792.0	95511	93.27	97887	1088		0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04

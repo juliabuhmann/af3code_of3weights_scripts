@@ -91,7 +91,7 @@ leaves in place, the largest pool that fits is 5000. Model time is each engine's
 (AlphaFold 3's log, OpenFold3's `timing.json`), excluding startup and parameter
 loading; details in [`profiling/`](profiling/).
 
-![Peak GPU memory and model time against complex size, AlphaFold 3 codebase vs OpenFold3 codebase](profiling/results/vram_and_runtime.png)
+![Peak GPU memory and model time against complex size, AlphaFold 3 codebase vs OpenFold3 codebase](profiling/results/codebases/vram_and_runtime.png)
 
 A third launcher for the OpenFold3 arm — Anthropic's `openfold3_ob0` optimization kit, in its `off`,
 `exact`, `fast` and `big` modes on the same openbind weights — is wired into the same sweep

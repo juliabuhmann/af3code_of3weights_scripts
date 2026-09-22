@@ -8,7 +8,7 @@ arms that differ only in the codebase, walked upwards until one of them stops.
 Both sweeps have been run to completion, on one RTX Pro 6000 (96 GiB) per arm, 5
 diffusion samples, 3 recycles, seed 42, templates off in both.
 
-![Peak live GPU memory vs token count](results/vram_vs_tokens.png)
+![Peak live GPU memory vs token count](results/codebases/vram_vs_tokens.png)
 
 *Each curve ends at the largest pool that ran; the next 500-token step ran out of GPU
 memory. Templates are off in both arms.*
@@ -27,7 +27,7 @@ Per-size numbers, including the nvidia-smi trace and the allocator's reserved
 high-water, are in `results/af3_openbind_templateoff.tsv` and
 `results/of3_openbind_templateoff.tsv` (copied out of
 `<base>/profiling/<arm>/vram_sweep.tsv` by the plotting script). `--runtime` adds the model
-time panel (`results/vram_and_runtime.png`), where the two engines cross over between
+time panel (`results/codebases/vram_and_runtime.png`), where the two engines cross over between
 1000 and 1500 tokens — OpenFold3 is faster below that and slower above it, which is the
 same crossover the Benchmark-IV runtimes show.
 
@@ -85,8 +85,8 @@ in that table, so a job that runs out of wall clock is resumed by submitting it 
 Then plot (matplotlib comes from the pixi environment):
 
 ```bash
-pixi run python profiling/plot_vram.py --out profiling/results/vram_vs_tokens.png
-pixi run python profiling/plot_vram.py --runtime --out profiling/results/vram_and_runtime.png
+pixi run python profiling/plot_vram.py --set codebases            # -> profiling/results/codebases/vram_vs_tokens.png
+pixi run python profiling/plot_vram.py --set codebases --runtime  # -> profiling/results/codebases/vram_and_runtime.png
 ```
 
 `plot_vram.py` picks up every `<arm>/vram_sweep.tsv` under `$AF3OF3_BASE_DIR/profiling`
