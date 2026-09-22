@@ -100,7 +100,7 @@ Anthropic's [uplifting-biomolecular-modeling](https://github.com/anthropics/upli
 release (Apache-2.0, 2026-09-17, explicitly unmaintained) ships `openfold3_ob0`: OpenFold3 0.5.0 with
 the OpenBind-0 checkpoint — the same code family and the very same weights as the `of3` arm — plus
 drop-in optimization modes: `off` (stock, as the kit defines it), `exact` (outputs identical to stock)
-`fast` (within stock's seed-to-seed variation) and `big` (lowest peak GPU memory, numerics as fast). Four arms run it through this sweep:
+`fast` (within stock's seed-to-seed variation) and `big` (lowest peak GPU memory, numerics as fast). Five arms run it through this sweep:
 
 | arm | config | what runs |
 |---|---|---|
@@ -108,6 +108,7 @@ drop-in optimization modes: `off` (stock, as the kit defines it), `exact` (outpu
 | `of3kit_exact_templateoff` | [`configs/of3kit_exact_templateoff.json`](../configs/of3kit_exact_templateoff.json) | `pred --mode exact` |
 | `of3kit_fast_templateoff` | [`configs/of3kit_fast_templateoff.json`](../configs/of3kit_fast_templateoff.json) | `pred --mode fast` |
 | `of3kit_big_templateoff` | [`configs/of3kit_big_templateoff.json`](../configs/of3kit_big_templateoff.json) | `pred --mode big` — lowest peak memory; below the kit's 1,401-token gate it is the fast line |
+| `of3kit_big_reachoff_templateoff` | [`configs/of3kit_big_reachoff_templateoff.json`](../configs/of3kit_big_reachoff_templateoff.json) | `pred --mode big` with `OPENFOLD3_OB0_OPT_REACH_GATE=none`: fused kernels + offload units at every size, never the streamed trunk |
 
 The kit is **not vendored**. A config's `launcher` block names a clone at a pinned commit, the venv,
 the kit's per-card file to source, the mode and the levers to disable;
@@ -146,7 +147,8 @@ figures above do not include these arms. Submit as for any arm:
 bash profiling/run_sweep.sh --config configs/of3kit_off_templateoff.json   --time 12:00:00
 bash profiling/run_sweep.sh --config configs/of3kit_exact_templateoff.json --time 12:00:00
 bash profiling/run_sweep.sh --config configs/of3kit_fast_templateoff.json  --time 12:00:00
-bash profiling/run_sweep.sh --config configs/of3kit_big_templateoff.json   --time 12:00:00
+bash profiling/run_sweep.sh --config configs/of3kit_big_templateoff.json   --time 24:00:00
+bash profiling/run_sweep.sh --config configs/of3kit_big_reachoff_templateoff.json --time 24:00:00
 ```
 
 Also new for every OF3 arm: a failed size keeps OpenFold3's own `logs/predict_err_rank0.log` next to
@@ -158,7 +160,9 @@ now carries `peak_host_anon_mib` (the job cgroup's anonymous memory, sampled onc
 50 GiB of 96, and read as a bare `error` (exit -9). That size also showed the kit's reach gate at work
 -- from 4500 tokens (the H100 table's value, via the sourced card file) the trunk runs in row blocks
 streamed from pinned host memory, ~26x slower than the fused kernels at 4000 -- so the `big` arm's
-points at and above 4500 are a memory curve, not a speed curve. Details in its config's notes.
+points at and above 4500 are a memory curve, not a speed curve. Details in its config's notes. The gate is
+tuned for an 80 GB card; `of3kit_big_reachoff` holds it open on this 96 GB one to see whether the
+fused-plus-offload path reaches the production scheme's 5,120 tokens. Not yet run.
 
 ## Anthropic's kit on the AlphaFold 3 codebase: the `af3kit_*` arms (A100)
 

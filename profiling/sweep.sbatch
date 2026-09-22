@@ -56,7 +56,7 @@
 #   af3: MODEL_DIR OF3_WEIGHTS + IMAGE (production image) OR KIT_KIND KIT_DIR KIT_ENV KIT_REPO KIT_CONFIG
 #        KIT_MODE KIT_VARIANT KIT_LEVERS_OFF KIT_ENV_VARS KIT_LD (Anthropic's af3_jax kit; configs/af3kit_*.json)
 #   of3: CKPT RUNNER_YAML, then EITHER OF3_SRC OF3_ENV (a source checkout in its own env)
-#        OR KIT_KIND KIT_DIR KIT_ENV KIT_CONFIG KIT_MODE KIT_LEVERS_OFF KIT_CUDA_HOME KIT_LD
+#        OR KIT_KIND KIT_DIR KIT_ENV KIT_CONFIG KIT_MODE KIT_LEVERS_OFF KIT_CUDA_HOME KIT_LD KIT_ENV_VARS
 #        (Anthropic's openfold3_ob0 kit; configs/of3kit_*.json, profiling/setup_kit_env.sh)
 
 set -euo pipefail
@@ -182,6 +182,9 @@ of3)
         # shellcheck disable=SC1090
         source "$KIT_DIR/configs/${KIT_CONFIG:-h100}.env"
         [[ -n "${KIT_LEVERS_OFF:-}" && "$KIT_MODE" != "off" ]] && export MODEL_OPT_LEVERS_OFF="$KIT_LEVERS_OFF"
+        # launcher.env from the config (KEY=VALUE;KEY=VALUE): the kit's own overrides, exported last so
+        # they win over the card file's defaults. Used by of3kit_big_reachoff to hold the reach gate open.
+        if [[ -n "${KIT_ENV_VARS:-}" ]]; then IFS=';' read -ra _kv <<< "$KIT_ENV_VARS"; for kv in "${_kv[@]}"; do export "$kv"; echo "kit env       : $kv"; done; fi
     else
         : "${OF3_SRC:?OF3_SRC must be set for engine of3 (or a launcher block)}"
         : "${OF3_ENV:?OF3_ENV must be set for engine of3 (or a launcher block)}"

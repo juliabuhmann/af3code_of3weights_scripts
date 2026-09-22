@@ -60,7 +60,7 @@
     "it is for (fast OOMs at 4500 on this card at 91 GiB, so the full-N^2 path genuinely does not fit), but",
     "it means sizes >= 4500 of this arm are a MEMORY curve, not a speed curve; each such size costs ~80 min",
     "per run, x2 with the warm-up, hence time 24:00:00. OPENFOLD3_OB0_OPT_REACH_GATE=<n> in the environment",
-    "moves the gate; on this card there is no reason to.",
+    "moves the gate. On this 96 GB card there IS a reason to: see of3kit_big_reachoff_templateoff.json.",
     "",
     "The OpenFold3 CODEBASE on the openbind weights, launched through Anthropic's `openfold3_ob0`",
     "optimization kit (github.com/anthropics/uplifting-biomolecular-modeling, Apache-2.0, released",

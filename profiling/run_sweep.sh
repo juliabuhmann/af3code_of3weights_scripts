@@ -206,11 +206,14 @@ of3)
         KIT_CUDA_HOME="${AF3OF3_KIT_CUDA_HOME:-$(cfg launcher.cuda_home)}"
         KIT_LD="${AF3OF3_KIT_LD:-$(cfg launcher.ld_library_path)}"
         KIT_CONFIG=$(cfg launcher.kit_config); KIT_MODE=$(cfg launcher.mode); KIT_LEVERS_OFF=$(cfg launcher.levers_off)
+        # launcher.env (optional): variables exported into the kit process, e.g. the kit's own gate
+        # overrides (OPENFOLD3_OB0_OPT_REACH_GATE, OF3O_MIN_TOKENS); the same map the af3 launcher takes.
+        KIT_ENV_VARS=$(python3 -c "import json,sys; e=json.load(open(sys.argv[1])).get('launcher',{}).get('env',{}); print(';'.join(f'{k}={v}' for k,v in e.items()))" "$CONFIG")
         [[ -n "$KIT_MODE" ]] || { echo "ERROR: launcher.mode missing in $CONFIG" >&2; exit 1; }
         [[ -d "$KIT_DIR" && -x "$KIT_ENV/bin/python" ]] || { echo "ERROR: kit dir or venv missing ($KIT_DIR, $KIT_ENV) -- profiling/setup_kit_env.sh" >&2; exit 1; }
         VARS+=("KIT_KIND=$KIT_KIND" "KIT_DIR=$KIT_DIR" "KIT_ENV=$KIT_ENV" "KIT_CONFIG=${KIT_CONFIG:-h100}" "KIT_MODE=$KIT_MODE"
-               "KIT_LEVERS_OFF=$KIT_LEVERS_OFF" "KIT_CUDA_HOME=$KIT_CUDA_HOME" "KIT_LD=$KIT_LD")
-        echo "launcher      : $KIT_KIND  mode=$KIT_MODE  levers_off=${KIT_LEVERS_OFF:-none}  card file=${KIT_CONFIG:-h100}.env"
+               "KIT_LEVERS_OFF=$KIT_LEVERS_OFF" "KIT_CUDA_HOME=$KIT_CUDA_HOME" "KIT_LD=$KIT_LD" "KIT_ENV_VARS=$KIT_ENV_VARS")
+        echo "launcher      : $KIT_KIND  mode=$KIT_MODE  levers_off=${KIT_LEVERS_OFF:-none}  card file=${KIT_CONFIG:-h100}.env${KIT_ENV_VARS:+  env=$KIT_ENV_VARS}"
         echo "kit dir       : $KIT_DIR  ($(cfg launcher.kit_commit))"
         echo "kit env       : $KIT_ENV"
     else
