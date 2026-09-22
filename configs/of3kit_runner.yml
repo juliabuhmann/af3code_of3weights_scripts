@@ -8,3 +8,9 @@
 data_module_args:
   num_workers: 0
   num_workers_validation: 0
+# Same as configs/of3_runner.yml: upstream's default writes the full per-sample PAE/PDE/contact
+# matrices (write_full_confidence_scores: True in core/runners/writer.py), which the of3 arm turns
+# off; the kit arms must too or the arms differ in output work, not only in code. Rows recorded
+# before 2026-09-22 (of3kit_* up to 4000 tokens) were written WITH the full scores.
+output_writer_settings:
+  write_full_confidence_scores: false

@@ -151,7 +151,14 @@ bash profiling/run_sweep.sh --config configs/of3kit_big_templateoff.json   --tim
 
 Also new for every OF3 arm: a failed size keeps OpenFold3's own `logs/predict_err_rank0.log` next to
 its trace (`<arm>/pool_<N>aa/of3_logs/`). Upstream labels every caught exception "OOM for query_id",
-and the traceback behind that line lives only there.
+and the traceback behind that line lives only there. And for every arm, each size's `results.json`
+now carries `peak_host_anon_mib` (the job cgroup's anonymous memory, sampled once a second) and
+`cgroup_oom_kills_during_size`; a SIGKILL with that counter moved is classified `cpu_oom`. The first
+`big` sweep needed this: at 4500 tokens it was killed twice by the host OOM killer with the GPU at
+50 GiB of 96, and read as a bare `error` (exit -9). That size also showed the kit's reach gate at work
+-- from 4500 tokens (the H100 table's value, via the sourced card file) the trunk runs in row blocks
+streamed from pinned host memory, ~26x slower than the fused kernels at 4000 -- so the `big` arm's
+points at and above 4500 are a memory curve, not a speed curve. Details in its config's notes.
 
 ## Anthropic's kit on the AlphaFold 3 codebase: the `af3kit_*` arms (A100)
 

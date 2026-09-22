@@ -20,7 +20,11 @@ WHAT status IS. Exit code alone is not enough: OpenFold3 exits 0 having failed e
 query, and both engines print an OOM before dying, so the log is read too.
   ok        ran, and (for of3, when --summary is given) reported no failed queries
   gpu_oom   an out-of-memory from the device — THE boundary this sweep looks for
-  cpu_oom   killed by the host OOM killer (exit 137), which is not a GPU limit
+  cpu_oom   killed by the host OOM killer, which is not a GPU limit: exit 137, or
+            exit -9 when the sweep's cgroup oom_kill counter moved (sweep.sbatch
+            upgrades `killed` to this after reading the counter)
+  killed    SIGKILL (Popen returncode -9) with no OOM evidence yet -- the cgroup
+            check in sweep.sbatch decides; on its own it is neither ok nor a GPU limit
   failed    finished without an OOM but did not produce a result
   error     any other non-zero exit
 
@@ -162,6 +166,10 @@ def classify(log_path: str, exit_code: int, summary_path: str) -> str:
         return "gpu_oom"
     if exit_code == 137:
         return "cpu_oom"
+    if exit_code == -9:
+        # Popen reports a signal death as -signal; the OOM killer sends SIGKILL, and so
+        # does SLURM at a limit. Which one it was is read from the cgroup by the caller.
+        return "killed"
     if summary_path and os.path.isfile(summary_path):
         try:
             summary = open(summary_path, errors="replace").read()

@@ -54,7 +54,7 @@
 #   MEM_FRACTION (af3, default 0.95)
 #   WARMUP_RUNS (default 0: untimed runs of each size before the recorded one)
 #   af3: MODEL_DIR OF3_WEIGHTS + IMAGE (production image) OR KIT_KIND KIT_DIR KIT_ENV KIT_REPO KIT_CONFIG
-#        KIT_MODE KIT_VARIANT KIT_LEVERS_OFF KIT_ENV_VARS (Anthropic's af3_jax kit; configs/af3kit_*.json)
+#        KIT_MODE KIT_VARIANT KIT_LEVERS_OFF KIT_ENV_VARS KIT_LD (Anthropic's af3_jax kit; configs/af3kit_*.json)
 #   of3: CKPT RUNNER_YAML, then EITHER OF3_SRC OF3_ENV (a source checkout in its own env)
 #        OR KIT_KIND KIT_DIR KIT_ENV KIT_CONFIG KIT_MODE KIT_LEVERS_OFF KIT_CUDA_HOME KIT_LD
 #        (Anthropic's openfold3_ob0 kit; configs/of3kit_*.json, profiling/setup_kit_env.sh)
@@ -94,6 +94,15 @@ mkdir -p "$SCRATCH/out" "$SCRATCH/tmp" "$SCRATCH/input" "$SCRATCH/torch_ext" \
          "$SCRATCH/triton" "$SCRATCH/alphafold_cache"
 trap 'rm -rf "$SCRATCH"' EXIT
 
+# The job's own cgroup (cgroup v2, as SLURM sets it up on these nodes): memory.events'
+# oom_kill counter says whether the host OOM killer struck during a size, and memory.stat's
+# anon line is the process-owned host memory (memory.current also counts reclaimable page
+# cache -- the 2.3 GB checkpoint, the venv -- and reads ~29 GiB even for a small pool).
+# Unreadable outside SLURM; every use below tolerates that.
+CGROUP="/sys/fs/cgroup/system.slice/slurmstepd.scope/job_${SLURM_JOB_ID:-0}"
+cg_oom_kills() { awk '$1=="oom_kill"{print $2}' "$CGROUP/memory.events" 2>/dev/null || echo 0; }
+cg_anon_mib()  { awk '$1=="anon"{printf "%d", $2/1048576}' "$CGROUP/memory.stat" 2>/dev/null || echo ""; }
+
 GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo unknown)
 DRIVER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 || echo unknown)
 
@@ -120,6 +129,13 @@ af3)
         # unset and keeps a caller's value, so the arena settings above stay in force.
         : "${KIT_DIR:?}" "${KIT_ENV:?}" "${KIT_REPO:?}" "${KIT_MODE:?}"
         export PATH="$KIT_ENV/bin:$PATH"
+        # A libstdc++ the venv can rely on. AlphaFold3's compiled extension (and opt_core's
+        # prebuilt kernels) need GLIBCXX_3.4.32, i.e. GCC 13's runtime, and Euler's GPU nodes are
+        # not uniform: the same five arms submitted together landed on eu-a65-05 (new enough, ran
+        # the whole ladder) and eu-ts-01 (older, ImportError at the first import, every size
+        # "error"). The image-based arms are immune because the container carries its own. Newer
+        # is backward compatible, so prepending is safe.
+        [[ -n "${KIT_LD:-}" ]] && export LD_LIBRARY_PATH="$KIT_LD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
         export PYTHONPATH="$KIT_DIR/opt:$KIT_DIR/../common/opt_core${PYTHONPATH:+:$PYTHONPATH}"
         export MODEL_OPT="$KIT_DIR" AF3_JAX_PY="$KIT_ENV/bin/python" PYTHONHASHSEED=0
         export AF3_JAX_REPO="$SCRATCH/af3_repo"; mkdir -p "$AF3_JAX_REPO"; cp "$KIT_REPO"/*.py "$AF3_JAX_REPO/"
@@ -323,9 +339,30 @@ run_size() {
 
     # </dev/null: the size loop reads the manifest on stdin, and a child process
     # that consumed it would silently truncate the sweep.
+    local oom_before host_log host_peak oom_after
+    oom_before=$(cg_oom_kills); host_log="$trace_dir/host_mem.log"; : > "$host_log"
+    ( while :; do cg_anon_mib >> "$host_log"; echo >> "$host_log"; sleep 1; done ) 2>/dev/null &
+    local host_sampler=$!
     set +e
     python3 "$REPO_DIR/profiling/run_with_trace.py" "${trace_args[@]}" -- "${cmd[@]}" </dev/null
     set -e
+    kill "$host_sampler" 2>/dev/null || true; wait "$host_sampler" 2>/dev/null || true
+    oom_after=$(cg_oom_kills); host_peak=$(sort -n "$host_log" 2>/dev/null | tail -1)
+    # Fold the host side into results.json: peak anonymous host memory, and a definitive
+    # cpu_oom when the cgroup's OOM-kill counter moved during this size (a SIGKILL alone
+    # is ambiguous: the OOM killer and SLURM's limits both send it).
+    if [[ -f "$trace_dir/results.json" ]]; then
+        python3 - "$trace_dir/results.json" "${host_peak:-}" "${oom_before:-0}" "${oom_after:-0}" <<'PYEOF'
+import json, sys
+path, host_peak, before, after = sys.argv[1:5]
+r = json.load(open(path))
+r["peak_host_anon_mib"] = int(host_peak) if host_peak.strip().isdigit() else None
+r["cgroup_oom_kills_during_size"] = int(after) - int(before)
+if r["cgroup_oom_kills_during_size"] > 0 and r.get("status") in ("killed", "error"):
+    r["status"] = "cpu_oom"
+json.dump(r, open(path, "w"), indent=2)
+PYEOF
+    fi
 
     # OpenFold3 writes the traceback behind an "OOM for query_id" line to its own
     # <output>/logs/predict_err_rank0.log, not to stdout, and labels every caught
@@ -410,7 +447,7 @@ try:
     print(json.load(open(sys.argv[1])).get('status', '?'))
 except Exception:
     print('error')" "$OUT_DIR/$(printf 'pool_%05daa' "$tokens")/results.json")
-    echo "finished    : $tokens tokens -> $STATUS   $(date -Is)"
+    echo "finished    : $tokens tokens -> $STATUS   host anon peak $(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('peak_host_anon_mib'))" "$OUT_DIR/$(printf 'pool_%05daa' "$tokens")/results.json" 2>/dev/null) MiB   $(date -Is)"
     if [[ "$STATUS" == "ok" ]]; then
         LAST_OK="$tokens"
     else
