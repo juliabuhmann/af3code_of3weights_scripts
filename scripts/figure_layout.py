@@ -235,6 +235,18 @@ def styles_for(arms: list[str], path: Path = STYLE_FILE) -> dict[str, dict]:
     return {a: styles[a] for a in arms}
 
 
+def title(ax, headline: str, subtitle: str | None = None) -> None:
+    """A figure's own headline, with the comparison it belongs to as a quieter line beneath.
+
+    The set's title says which arms are being compared; it does not say what the figure
+    plots, and reusing it as the title left memory and runtime figures that could only be
+    told apart by their axes. The headline names the measurement, the subtitle the set."""
+    ax.set_title(headline, pad=28 if subtitle else 12)
+    if subtitle:
+        ax.text(0.0, 1.015, subtitle, transform=ax.transAxes, va="bottom", ha="left",
+                fontsize=11.5, color=INK_TEXT)
+
+
 def outside_legend(ax, **kwargs) -> None:
     """Legend to the right of the axes, so it can never cover a data point."""
     ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0, **kwargs)

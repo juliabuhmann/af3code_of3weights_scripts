@@ -192,59 +192,59 @@ def plot_vram(arms: list[Arm], metric: str, out: Path, title: str | None) -> Pat
     ax.set_xlabel(X_LABEL)
     ax.set_ylabel("Peak live GPU memory (GiB)" if metric == "peak_alloc_gib"
                   else "Peak device memory, nvidia-smi (GiB)")
-    ax.set_title(title or ("Peak live GPU memory vs complex size" if metric == "peak_alloc_gib"
-                           else "Peak device memory vs complex size"))
+    fl.title(ax, "Peak live GPU memory vs complex size" if metric == "peak_alloc_gib"
+             else "Peak device memory vs complex size", title)
     if len(arms) > 1:
         fl.outside_legend(ax)
     return fl.save(fig, out / "vram_vs_tokens.png")
 
 
-def speedup_labels(arms: list[Arm], baseline: Arm | None, at_tokens: int | None) -> dict[str, str]:
-    """A legend suffix per arm: its model time at one token count, and how many times the
-    baseline's that is. The number belongs beside the curve it describes, and one size --
-    the one actually run in production -- is the one worth reading off exactly. An arm
-    with no row at that size gets no suffix rather than an interpolated one."""
+def annotate_speedup(ax, arms: list[Arm], baseline: Arm | None, at_tokens: int | None) -> None:
+    """Write each arm's speed-up over the baseline beside its own marker at one token count.
+
+    A direct label on the point it describes, rather than a number in the legend the reader
+    has to carry back to the curve. One size is labelled -- the one the pooled scheme
+    actually runs -- because a number on every point goes unread. An arm with no row there
+    is not labelled rather than interpolated."""
     if not at_tokens or baseline is None:
-        return {}
+        return
     base = baseline.ok_map("model_s").get(at_tokens)
     if base is None:
         print(f"  [WARN] speed-up at {at_tokens} tokens: the baseline {baseline.name} has no "
               f"model time there; the runtime figure is not annotated")
-        return {}
-    out = {baseline.name: f"{base:.0f} s at {at_tokens:,} tokens"}
+        return
     for arm in arms:
         if arm is baseline:
             continue
         value = arm.ok_map("model_s").get(at_tokens)
-        if value is not None:
-            out[arm.name] = f"{value:.0f} s at {at_tokens:,} tokens, {base / value:.2f}x faster"
-    return out
+        if value is None:
+            continue
+        # A ring in the surface colour lifts the labelled point off its curve.
+        ax.plot([at_tokens], [value], marker=fl.MARKER, ms=11, color=arm.style["color"],
+                markeredgecolor="white", markeredgewidth=2.5, zorder=5)
+        ax.annotate(f"{base / value:.2f}x faster than\n{baseline.label}  ({base:.0f} s)",
+                    xy=(at_tokens, value), xytext=(12, -6), textcoords="offset points",
+                    va="top", ha="left", fontsize=11, color=fl.INK_TEXT)
+        print(f"  {arm.name}: {value:.0f} s at {at_tokens:,} tokens, "
+              f"{base / value:.2f}x the baseline's {base:.0f} s")
 
 
 def plot_runtime(arms: list[Arm], out: Path, title: str | None, baseline: Arm | None = None,
                  at_tokens: int | None = None) -> Path | None:
     fig, ax = plt.subplots(figsize=(9.0, 5.8))
-    notes = speedup_labels(arms, baseline, at_tokens)
-    labels = {a.name: (f"{a.label}\n{notes[a.name]}" if a.name in notes else a.label) for a in arms}
     # A list, not a generator: any() would short-circuit and leave every arm after the
     # first one undrawn.
-    if not any([draw_line(ax, a, "model_s", labels[a.name]) for a in arms]):
+    if not any([draw_line(ax, a, "model_s") for a in arms]):
         plt.close(fig)
         print("  runtime_vs_tokens: no model_s values, skipping")
         return None
-    if notes:
-        # Where the numbers beside the curves were read off.
-        ax.axvline(at_tokens, color=fl.INK_FAINT, lw=1.2, ls="--", zorder=0)
-        ax.text(at_tokens, 0.02, f"{at_tokens:,} tokens ", rotation=90, va="bottom", ha="right",
-                transform=ax.get_xaxis_transform(), fontsize=10.5, color=fl.INK_MUTED)
+    annotate_speedup(ax, arms, baseline, at_tokens)
     ax.set_xlabel(X_LABEL)
     ax.set_ylabel("Model time (s)")
-    ax.set_title(title or "Featurisation + inference vs complex size")
+    fl.title(ax, "Model time vs complex size", title)
     ax.set_ylim(bottom=0)
     if len(arms) > 1:
         fl.outside_legend(ax)
-    for name, note in notes.items():
-        print(f"  {name}: {note}")
     return fl.save(fig, out / "runtime_vs_tokens.png")
 
 
