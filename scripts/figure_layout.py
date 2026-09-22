@@ -23,13 +23,15 @@ arms on the command line still works for a quick look; the directory is then the
 joined with "_vs_", and the module refuses a name longer than a file system allows
 rather than truncating it.
 
-Every arm has ONE colour and ONE marker, in configs/arm_style.json, used in every
-figure it appears in. Two arms that never share a figure may share a colour (the four
-kit modes mean the same thing in the OpenFold3 and the AlphaFold 3 kit, so they wear
-the same hues); `styles_for` refuses to draw a set in which two arms collide, so the
-rule is checked rather than remembered. The eight hues are a validated categorical
-palette (colour-vision-deficiency separation and normal-vision separation both
-checked pairwise in each set's legend order); do not add a ninth.
+Every arm has ONE colour, in configs/arm_style.json, used in every figure it appears in,
+and colour is the only thing that varies: every series is drawn with the same marker and
+a solid line, so a figure carries one visual variable rather than three. Two arms that
+never share a figure may share a colour (the four kit modes mean the same thing in the
+OpenFold3 and the AlphaFold 3 kit, so they wear the same hues); `styles_for` refuses to
+draw a set in which two arms collide, so the rule is checked rather than remembered. The
+eight hues are a validated categorical palette (colour-vision-deficiency separation and
+normal-vision separation both checked pairwise in each set's legend order); do not add a
+ninth.
 
 Imported by profiling/plot_vram.py and scripts/06_plot_comparison.py.
 """
@@ -197,10 +199,29 @@ def load_styles(path: Path = STYLE_FILE) -> dict[str, dict]:
     return {k: v for k, v in styles.items() if not k.startswith("_")}
 
 
+# One marker and one line style for every series: colour is the identity channel, and it
+# is the only thing that varies between arms.
+MARKER = "o"
+LINESTYLE = "-"
+
+
+def line_width(index: int, total: int) -> float:
+    """Series width, tapering from 3.2 to 2.0 down the legend order.
+
+    Not an encoding -- nothing reads it, and the taper is small enough to pass for one
+    weight. It exists because some arms measure the same thing and their curves coincide
+    exactly (the kit's `off` and `exact` modes; `big` below its reach gate and `big` with
+    the gate held open). Drawn at one width the later arm would hide the earlier one
+    completely; drawn this way the earlier one shows as a rim around it."""
+    if total < 2:
+        return 2.4
+    return 3.2 - 1.2 * index / (total - 1)
+
+
 def styles_for(arms: list[str], path: Path = STYLE_FILE) -> dict[str, dict]:
-    """{arm: {"color", "marker", "linestyle"}} for the arms of one figure. Refuses an arm
-    with no entry (every arm has a fixed colour, or the promise is empty) and two arms in
-    the same figure wearing the same colour."""
+    """{arm: {"color", ...}} for the arms of one figure. Refuses an arm with no entry
+    (every arm has a fixed colour, or the promise is empty) and two arms in the same
+    figure wearing the same colour."""
     styles = load_styles(path)
     missing = [a for a in arms if a not in styles]
     if missing:

@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "One colour and one marker per arm, used in every figure the arm appears in, so a reader who",
+    "One colour per arm, used in every figure the arm appears in, so a reader who",
     "has learnt that the production engine is blue never has to relearn it. Eight hues, a validated",
     "categorical palette (light surface; colour-vision-deficiency and normal-vision separation checked",
     "pairwise in each set's legend order) -- never add a ninth, reuse one instead: two arms may share",
@@ -8,28 +8,30 @@
     "scripts/figure_layout.py refuses to draw a set where two arms collide.",
     "The four kit modes wear the same hues in the OpenFold3 kit and the AlphaFold 3 kit (off violet,",
     "exact yellow, fast aqua, big green): they mean the same thing, and the two kits share no figure.",
+    "Colour is the ONLY identity channel: every arm is drawn with the same marker and a solid line, so",
+    "a figure carries one visual variable rather than three. Where two arms' curves coincide exactly",
+    "the upper one hides the lower; the sweep printout and metrics.tsv carry both.",
     "Hues: blue #2a78d6  orange #eb6834  aqua #1baf7a  yellow #eda100  magenta #e87ba4",
     "      green #008300  violet #4a3aa7  red #e34948",
-    "`linestyle` is the second identity channel: two arms whose curves coincide (kit off under exact,",
-    "big under big with the reach gate off) stay both visible because one of them is dashed."
+    "`hue` and `role` are documentation: nothing reads them, they say why a slot was chosen."
   ],
 
-  "af3_openbind_templateoff":        {"color": "#2a78d6", "marker": "o", "linestyle": "-", "hue": "blue",    "role": "production engine, RTX PRO 6000"},
-  "af3_openbind_templateoff_a100":   {"color": "#e34948", "marker": "h", "linestyle": "-", "hue": "red",     "role": "production engine, A100"},
-  "of3_openbind_templateoff":        {"color": "#eb6834", "marker": "s", "linestyle": "-", "hue": "orange",  "role": "stock OpenFold3 code"},
+  "af3_openbind_templateoff":        {"color": "#2a78d6", "hue": "blue",    "role": "production engine, RTX PRO 6000"},
+  "af3_openbind_templateoff_a100":   {"color": "#e34948", "hue": "red",     "role": "production engine, A100"},
+  "of3_openbind_templateoff":        {"color": "#eb6834", "hue": "orange",  "role": "stock OpenFold3 code"},
 
-  "of3kit_off_templateoff":          {"color": "#4a3aa7", "marker": "D", "linestyle": "-", "hue": "violet",  "role": "kit off"},
-  "of3kit_exact_templateoff":        {"color": "#eda100", "marker": "^", "linestyle": "--", "hue": "yellow",  "role": "kit exact"},
-  "of3kit_fast_templateoff":         {"color": "#1baf7a", "marker": "v", "linestyle": "-", "hue": "aqua",    "role": "kit fast"},
-  "of3kit_big_templateoff":          {"color": "#008300", "marker": "P", "linestyle": "-", "hue": "green",   "role": "kit big"},
-  "of3kit_big_reachoff_templateoff": {"color": "#e87ba4", "marker": "X", "linestyle": "--", "hue": "magenta", "role": "kit big, reach gate off"},
+  "of3kit_off_templateoff":          {"color": "#4a3aa7", "hue": "violet",  "role": "kit off"},
+  "of3kit_exact_templateoff":        {"color": "#eda100", "hue": "yellow",  "role": "kit exact"},
+  "of3kit_fast_templateoff":         {"color": "#1baf7a", "hue": "aqua",    "role": "kit fast"},
+  "of3kit_big_templateoff":          {"color": "#008300", "hue": "green",   "role": "kit big"},
+  "of3kit_big_reachoff_templateoff": {"color": "#e87ba4", "hue": "magenta", "role": "kit big, reach gate off"},
 
-  "af3kit_off_p2_templateoff_a100":   {"color": "#4a3aa7", "marker": "D", "linestyle": "-", "hue": "violet", "role": "kit off"},
-  "af3kit_exact_p2_templateoff_a100": {"color": "#eda100", "marker": "^", "linestyle": "--", "hue": "yellow", "role": "kit exact"},
-  "af3kit_fast_p2_templateoff_a100":  {"color": "#1baf7a", "marker": "v", "linestyle": "-", "hue": "aqua",   "role": "kit fast"},
-  "af3kit_big_p2_templateoff_a100":   {"color": "#008300", "marker": "P", "linestyle": "-", "hue": "green",  "role": "kit big"},
+  "af3kit_off_p2_templateoff_a100":   {"color": "#4a3aa7", "hue": "violet", "role": "kit off"},
+  "af3kit_exact_p2_templateoff_a100": {"color": "#eda100", "hue": "yellow", "role": "kit exact"},
+  "af3kit_fast_p2_templateoff_a100":  {"color": "#1baf7a", "hue": "aqua",   "role": "kit fast"},
+  "af3kit_big_p2_templateoff_a100":   {"color": "#008300", "hue": "green",  "role": "kit big"},
 
-  "af3_native":      {"color": "#008300", "marker": "P", "linestyle": "-", "hue": "green",  "role": "AlphaFold 3 code and weights, templates on"},
-  "af3_openbind":    {"color": "#4a3aa7", "marker": "D", "linestyle": "-", "hue": "violet", "role": "AlphaFold 3 code, openbind weights, templates on"},
-  "zheng_af3_local": {"color": "#eda100", "marker": "^", "linestyle": "--", "hue": "yellow", "role": "Zheng & Peng's own AlphaFold 3 predictions"}
+  "af3_native":      {"color": "#008300", "hue": "green",  "role": "AlphaFold 3 code and weights, templates on"},
+  "af3_openbind":    {"color": "#4a3aa7", "hue": "violet", "role": "AlphaFold 3 code, openbind weights, templates on"},
+  "zheng_af3_local": {"color": "#eda100", "hue": "yellow", "role": "Zheng & Peng's own AlphaFold 3 predictions"}
 }

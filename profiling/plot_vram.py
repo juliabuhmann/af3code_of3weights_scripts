@@ -146,13 +146,13 @@ def label_arms(arms: list[Arm]) -> None:
 
 # --------------------------------------------------------------------------- figures
 
-def draw_line(ax, arm: Arm, key: str) -> bool:
+def draw_line(ax, arm: Arm, key: str, index: int = 0, total: int = 1) -> bool:
     pts = sorted(arm.ok_map(key).items())
     if not pts:
         return False
     xs, ys = zip(*pts)
-    ax.plot(xs, ys, marker=arm.style["marker"], color=arm.style["color"],
-            ls=arm.style.get("linestyle", "-"), label=arm.label)
+    ax.plot(xs, ys, marker=fl.MARKER, ls=fl.LINESTYLE, color=arm.style["color"],
+            lw=fl.line_width(index, total), label=arm.label)
     return True
 
 
@@ -182,7 +182,7 @@ def reference_lines(ax, arms: list[Arm]) -> None:
 
 def plot_vram(arms: list[Arm], metric: str, out: Path, title: str | None) -> Path | None:
     fig, ax = plt.subplots(figsize=(9.0, 5.8))
-    drawn = [draw_line(ax, a, metric) for a in arms]
+    drawn = [draw_line(ax, a, metric, i, len(arms)) for i, a in enumerate(arms)]
     if not any(drawn):
         plt.close(fig)
         print(f"  vram_vs_tokens: no '{metric}' values in any arm, skipping "
@@ -203,7 +203,7 @@ def plot_runtime(arms: list[Arm], out: Path, title: str | None) -> Path | None:
     fig, ax = plt.subplots(figsize=(9.0, 5.8))
     # A list, not a generator: any() would short-circuit and leave every arm after the
     # first one undrawn.
-    if not any([draw_line(ax, a, "model_s") for a in arms]):
+    if not any([draw_line(ax, a, "model_s", i, len(arms)) for i, a in enumerate(arms)]):
         plt.close(fig)
         print("  runtime_vs_tokens: no model_s values, skipping")
         return None
@@ -230,14 +230,13 @@ def plot_ratio(arms: list[Arm], baseline: Arm, metric: str, out: Path,
         return None, []
     fig, (ax_s, ax_m) = plt.subplots(1, 2, figsize=(16.0, 5.8))
     table = []
-    for arm in arms:
-        if arm is baseline:
-            continue
+    others = [a for a in arms if a is not baseline]
+    for index, arm in enumerate(others):
         t_map, m_map = arm.ok_map("model_s"), arm.ok_map(metric)
         common_t = sorted(set(t_map) & set(base_t))
         common_m = sorted(set(m_map) & set(base_m))
-        kw = dict(marker=arm.style["marker"], color=arm.style["color"],
-                  ls=arm.style.get("linestyle", "-"), label=arm.label)
+        kw = dict(marker=fl.MARKER, ls=fl.LINESTYLE, color=arm.style["color"],
+                  lw=fl.line_width(index, len(others)), label=arm.label)
         if common_t:
             ax_s.plot(common_t, [base_t[k] / t_map[k] for k in common_t], **kw)
         if common_m:

@@ -139,10 +139,11 @@ def plot_dockq_distribution(rows, arms, labels, styles, baseline, out, title) ->
     fig, axes = plt.subplots(1, 2 if paired else 1, figsize=(14.0 if paired else 8.0, 5.6),
                              squeeze=False)
     ax1 = axes[0][0]
-    for arm in arms:
+    for index, arm in enumerate(arms):
         xs = np.sort(np.array([values[arm][e] for e in common]))
         ys = np.arange(1, len(xs) + 1) / len(xs)
         ax1.step(xs, ys, where="post", color=styles[arm]["color"],
+                 lw=fl.line_width(index, len(arms)),
                  label=f"{labels[arm]}\nmedian {np.median(xs):.3f}")
     for threshold, name in DOCKQ_THRESHOLDS:
         ax1.axvline(threshold, ls=":", lw=1.0, color=fl.INK_FAINT, zorder=0)
@@ -182,7 +183,7 @@ def plot_runtime_vs_size(rows, arms, labels, styles, column, out, title) -> Path
         if not pts:
             continue
         xs, ys = zip(*pts)
-        ax.scatter(xs, ys, s=34, alpha=0.8, color=styles[arm]["color"], marker=styles[arm]["marker"],
+        ax.scatter(xs, ys, s=34, alpha=0.8, color=styles[arm]["color"], marker=fl.MARKER,
                    edgecolor="white", linewidth=0.8,
                    label=f"{labels[arm]}\nn={len(pts)}, median {np.median(ys):.0f} s")
         plotted = True
@@ -240,7 +241,7 @@ def plot_runtime_paired(rows, arms, labels, styles, baseline, column, out) -> Pa
     xs = np.array([values[baseline][e] for e in common])
     ys = np.array([values[other][e] for e in common])
     fig, ax = plt.subplots(figsize=(7.2, 6.4))
-    ax.scatter(xs, ys, s=34, alpha=0.8, color=styles[other]["color"], marker=styles[other]["marker"],
+    ax.scatter(xs, ys, s=34, alpha=0.8, color=styles[other]["color"], marker=fl.MARKER,
                edgecolor="white", linewidth=0.8)
     hi = max(xs.max(), ys.max()) * 1.05
     ax.plot([0, hi], [0, hi], ls="--", lw=1.2, color=fl.INK_MUTED, zorder=0)
