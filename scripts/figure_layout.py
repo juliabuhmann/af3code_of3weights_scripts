@@ -247,6 +247,32 @@ def title(ax, headline: str, subtitle: str | None = None) -> None:
                 fontsize=11.5, color=INK_TEXT)
 
 
+SEPARATOR = " / "
+
+
+def drop_shared_term(labels: dict[str, str], values: dict[str, str]) -> dict[str, str]:
+    """Remove the part of each label that names an axis every arm agrees on.
+
+    A legend should spell out what DIFFERS between the series; a term identical across
+    all of them is context that belongs in the title, and repeating it on every entry is
+    noise the reader has to look past. `values` is each arm's value on that axis (the
+    `weights` column, say): when they all agree and the value is non-empty, any
+    "/"-separated segment of a label that mentions it is dropped. Nothing is dropped when
+    the arms disagree -- that is exactly when the term carries the comparison -- nor when
+    it would empty a label."""
+    shared = set(values.values())
+    if len(shared) != 1:
+        return labels
+    term = shared.pop().strip().lower()
+    if not term:
+        return labels
+    out = {}
+    for arm, label in labels.items():
+        kept = [s for s in label.split(SEPARATOR) if term not in s.lower()]
+        out[arm] = SEPARATOR.join(kept) if kept else label
+    return out
+
+
 def outside_legend(ax, **kwargs) -> None:
     """Legend to the right of the axes, so it can never cover a data point."""
     ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0, **kwargs)

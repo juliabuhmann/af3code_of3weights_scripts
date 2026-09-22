@@ -106,6 +106,7 @@ def field(rows: list[dict], arm: str, column: str, default: str = "") -> str:
 def arm_labels(rows: list[dict], arms: list[str]) -> dict[str, str]:
     """Legend labels spelling out only what DIFFERS; never two series with one label."""
     labels = {a: field(rows, a, "tag", default=a) or a for a in arms}
+    labels = fl.drop_shared_term(labels, {a: field(rows, a, "weights") for a in arms})
     states = {a: field(rows, a, "use_templates") for a in arms}
     if len(set(states.values())) > 1:
         labels = {a: f"{labels[a]} ({TEMPLATE_STATE.get(states[a], 'templates ?')})" for a in arms}

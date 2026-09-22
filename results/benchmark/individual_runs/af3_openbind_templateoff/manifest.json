@@ -1,7 +1,7 @@
 {
   "experiment": "benchmark",
   "set": null,
-  "title": "AF3 code / openbind weights (templates off)",
+  "title": "AF3 code (templates off)",
   "arms": [
     "af3_openbind_templateoff"
   ],
@@ -20,6 +20,6 @@
     "runtime_vs_size.png"
   ],
   "script": "scripts/06_plot_comparison.py",
-  "git_commit": "1e877de+dirty",
+  "git_commit": "0e59948+dirty",
   "runtime_column": "model_s"
 }

@@ -1,7 +1,7 @@
 {
   "experiment": "scaling",
   "set": null,
-  "title": "OF3 code / openbind",
+  "title": "OF3 code",
   "arms": [
     "of3_openbind_templateoff"
   ],
@@ -19,7 +19,7 @@
     "vram_vs_tokens.png"
   ],
   "script": "profiling/plot_vram.py",
-  "git_commit": "513daf1+dirty",
+  "git_commit": "0e59948+dirty",
   "metric": "peak_alloc_gib",
   "speedup_at_tokens": null
 }

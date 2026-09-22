@@ -132,9 +132,14 @@ def load_arm(sweep_dir: Path, name: str, style: dict) -> Arm | None:
 
 
 def label_arms(arms: list[Arm]) -> None:
-    """Legend labels: the config's tag, plus the template state only when the arms
-    disagree on it, plus the arm name only when tags still collide (the two cards of one
-    configuration carry the same tag). Two series never wear the same label."""
+    """Legend labels: the config's tag, minus the weights when every arm runs the same
+    ones, plus the template state only when the arms disagree on it, plus the arm name
+    only when tags still collide (the two cards of one configuration carry the same tag).
+    Two series never wear the same label."""
+    stripped = fl.drop_shared_term({a.name: a.label for a in arms},
+                                   {a.name: a.first("weights") for a in arms})
+    for a in arms:
+        a.label = stripped[a.name]
     if len({a.first("use_templates") for a in arms}) > 1:
         for a in arms:
             a.label = f"{a.label} ({TEMPLATE_STATE.get(a.first('use_templates'), 'templates ?')})"
