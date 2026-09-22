@@ -162,7 +162,10 @@ now carries `peak_host_anon_mib` (the job cgroup's anonymous memory, sampled onc
 streamed from pinned host memory, ~26x slower than the fused kernels at 4000 -- so the `big` arm's
 points at and above 4500 are a memory curve, not a speed curve. Details in its config's notes. The gate is
 tuned for an 80 GB card; `of3kit_big_reachoff` holds it open on this 96 GB one to see whether the
-fused-plus-offload path reaches the production scheme's 5,120 tokens. Not yet run.
+fused-plus-offload path reaches the production scheme's 5,120 tokens. **Run 2026-09-22: it does.** With the
+gate held open, `big` runs to 6,000 tokens (81.5 GiB) and fails at 6,500; at 5,000 tokens it takes 510 s
+against 835 s for the AlphaFold3 code on the same pools, 1.6x faster, and it reaches 500 tokens further than
+that code does. Host memory peaked at 71 GB, so the 128 GB request was necessary. Figure set `of3kit_rtxpro6000`.
 
 ## Anthropic's kit on the AlphaFold 3 codebase: the `af3kit_*` arms (A100)
 

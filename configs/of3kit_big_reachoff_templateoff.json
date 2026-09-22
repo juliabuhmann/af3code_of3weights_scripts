@@ -48,6 +48,8 @@
     "time, roughly 1.5x faster than the AlphaFold3 code at that size. If it does not, the boundary is one",
     "gpu_oom row, minutes, not hours.",
     "",
+    "MEASURED 2026-09-22 (job 14837078, RTX PRO 6000, 8 x 16 GB host): ok through 6000 tokens -- 5000: 510 s at 57.2 GiB; 5500: 628 s at 68.8 GiB; 6000: 773 s at 81.5 GiB -- gpu_oom at 6500 (91 GiB). Host anonymous memory peaked at 71 GB at 6000 tokens, so the 128 GB request was needed. Against the AlphaFold3 code on the same pools: 835 s at 5000 and 1001 s at 5500, i.e. this arm is 1.6x faster at the production scheme's size and reaches 500 tokens further (the AF3 code fails at 6000).",
+    "",
     "levers_off=pair_transition as for fast (the fused pair transition refuses on compute capability 12.0).",
     "warmup_runs 1, mem_per_cpu 16g and time 24:00:00 as for of3kit_big; below 4500 this arm duplicates it.",
     "",
