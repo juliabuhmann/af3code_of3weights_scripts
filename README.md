@@ -91,12 +91,15 @@ leaves in place, the largest pool that fits is 5000. Model time is each engine's
 (AlphaFold 3's log, OpenFold3's `timing.json`), excluding startup and parameter
 loading; details in [`profiling/`](profiling/).
 
-![Peak GPU memory and model time against complex size, AlphaFold 3 codebase vs OpenFold3 codebase](profiling/results/codebases/vram_and_runtime.png)
+![Peak GPU memory against complex size, AlphaFold 3 codebase vs OpenFold3 codebase](results/scaling/sweep/codebases/vram_vs_tokens.png)
+![Model time against complex size, AlphaFold 3 codebase vs OpenFold3 codebase](results/scaling/sweep/codebases/runtime_vs_tokens.png)
 
 A third launcher for the OpenFold3 arm — Anthropic's `openfold3_ob0` optimization kit, in its `off`,
-`exact`, `fast` and `big` modes on the same openbind weights — is wired into the same sweep
-(`configs/of3kit_*.json`; [`profiling/README.md`](profiling/README.md)). It has not been run yet, so
-nothing below includes it.
+`exact`, `fast` and `big` modes on the same openbind weights — runs through the same sweep
+(`configs/of3kit_*.json`; [`profiling/README.md`](profiling/README.md)). Its measurements are in
+[`results/scaling/sweep/of3kit_rtxpro6000/`](results/scaling/sweep/of3kit_rtxpro6000/), not in the
+figure above, which is the two codebases alone. The DockQ figures below predate the kit and do not
+include it.
 
 ### Performance
 
@@ -122,13 +125,35 @@ weights, everything else held fixed: same precomputed MSAs, no templates either 
 3 recycles, 5 diffusion samples, seed 42, same GPU type. Scored with DockQ v2 at
 default settings, as in the paper. Each point is one complex:
 
-![DockQ per complex, AlphaFold 3 codebase vs OpenFold3 codebase, both on openbind weights](results/figures_engine/dockq_scatter.png)
+![DockQ per complex, AlphaFold 3 codebase vs OpenFold3 codebase, both on openbind weights](results/benchmark/sweep/engine/dockq_scatter.png)
 
 Per-complex values, per-interface metrics and inference times are in
 [`results/dockq.tsv`](results/dockq.tsv) and
 [`results/profiling.tsv`](results/profiling.tsv), where the `run` column names the arm:
 the two above, plus the templates-on pair on either weight set (`af3_openbind`,
 `af3_native`) and the paper's own predictions (`zheng_af3_local`).
+
+### Where the figures are
+
+Every figure is written by a script into a directory named after the comparison it
+shows, so a figure is never separated from the numbers behind it:
+
+    results/<experiment>/sweep/<set>/            several arms compared
+    results/<experiment>/individual_runs/<arm>/  one arm on its own
+
+`<experiment>` is `benchmark` (DockQ and model time per complex, Benchmark-IV) or
+`scaling` (peak memory and model time against token count, on the pool ladder).
+`<set>` is an entry in [`configs/figure_sets.json`](configs/figure_sets.json), which
+names the arms, their legend order and the baseline; each directory also holds
+`metrics.tsv` and a `manifest.json` recording the source tables and the commit that
+drew them. Each arm keeps one colour, marker and line style across every figure in the
+repository, from [`configs/arm_style.json`](configs/arm_style.json). To redraw:
+
+```bash
+pixi run plot-benchmark --set engine --dockq $AF3OF3_BASE_DIR/results/dockq \
+                                     --profile $AF3OF3_BASE_DIR/results/profiling
+pixi run plot-scaling   --set of3kit_rtxpro6000
+```
 
 ### How do AlphaFold 3's own weights compare to openbind?
 

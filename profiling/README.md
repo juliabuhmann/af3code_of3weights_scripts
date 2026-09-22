@@ -8,7 +8,7 @@ arms that differ only in the codebase, walked upwards until one of them stops.
 Both sweeps have been run to completion, on one RTX Pro 6000 (96 GiB) per arm, 5
 diffusion samples, 3 recycles, seed 42, templates off in both.
 
-![Peak live GPU memory vs token count](results/codebases/vram_vs_tokens.png)
+![Peak live GPU memory vs token count](../results/scaling/sweep/codebases/vram_vs_tokens.png)
 
 *Each curve ends at the largest pool that ran; the next 500-token step ran out of GPU
 memory. Templates are off in both arms.*
@@ -24,12 +24,11 @@ card, and needs roughly half the memory at matched size (3500 tokens: 34.5 GiB a
 demand and stops against the card itself.
 
 Per-size numbers, including the nvidia-smi trace and the allocator's reserved
-high-water, are in `results/af3_openbind_templateoff.tsv` and
-`results/of3_openbind_templateoff.tsv` (copied out of
-`<base>/profiling/<arm>/vram_sweep.tsv` by the plotting script). `--runtime` adds the model
-time panel (`results/codebases/vram_and_runtime.png`), where the two engines cross over between
-1000 and 1500 tokens — OpenFold3 is faster below that and slower above it, which is the
-same crossover the Benchmark-IV runtimes show.
+high-water, are in `../results/scaling/sweep/codebases/metrics.tsv` (every plotted row,
+copied out of `<base>/profiling/<arm>/vram_sweep.tsv` by the plotting script). The model
+time figure in the same directory, `runtime_vs_tokens.png`, shows the two engines crossing
+over between 1000 and 1500 tokens — OpenFold3 is faster below that and slower above it,
+the same crossover the Benchmark-IV runtimes show.
 
 ## What is measured
 
@@ -85,14 +84,17 @@ in that table, so a job that runs out of wall clock is resumed by submitting it 
 Then plot (matplotlib comes from the pixi environment):
 
 ```bash
-pixi run python profiling/plot_vram.py --set codebases            # -> profiling/results/codebases/vram_vs_tokens.png
-pixi run python profiling/plot_vram.py --set codebases --runtime  # -> profiling/results/codebases/vram_and_runtime.png
+pixi run plot-scaling --set codebases          # -> results/scaling/sweep/codebases/
+pixi run plot-scaling --set of3kit_rtxpro6000  # -> results/scaling/sweep/of3kit_rtxpro6000/
 ```
 
-`plot_vram.py` picks up every `<arm>/vram_sweep.tsv` under `$AF3OF3_BASE_DIR/profiling`
-(override with `--sweep-dir`, restrict and order with `--arms`), prints the per-size
-table it plotted, and takes `--metric peak_vram_gib` to plot the nvidia-smi trace
-instead of the default live-buffer high-water.
+One invocation writes every figure of the set's directory plus one directory per arm, so
+a figure can never be older than the table beside it. `plot_vram.py` reads
+`<arm>/vram_sweep.tsv` under `$AF3OF3_BASE_DIR/profiling` (override with `--sweep-dir`),
+prints the per-size table it plotted, and takes `--metric peak_vram_gib` to plot the
+nvidia-smi trace instead of the default live-buffer high-water. `--arms A B [--baseline A]`
+compares an unregistered pair for a quick look; register the comparison in
+`configs/figure_sets.json` to keep it.
 
 ## A third way to launch the OF3 engine: Anthropic's optimization kit
 
@@ -138,10 +140,9 @@ Three things a reader of the numbers should know.
   [`configs/of3kit_stock_runner.yml`](../configs/of3kit_stock_runner.yml), which copies the kit's
   file with its provenance in the header.
 
-Status (2026-09-21): the launch path is validated at 500 tokens — `exact` and `fast` through the
-sweep itself, `off` by the identical command run by hand while a foreign process held the GPU;
-`big` only dry-run (same path, different `--mode` word). **No sweep has been run**; the tables and
-figures above do not include these arms. Submit as for any arm:
+Status (2026-09-22): all five OpenFold3-kit arms have been swept on the RTX PRO 6000;
+their figures are in `results/scaling/sweep/of3kit_rtxpro6000/`. The four `af3kit_*` arms on
+the A100 have not run. Submit as for any arm:
 
 ```bash
 bash profiling/run_sweep.sh --config configs/of3kit_off_templateoff.json   --time 12:00:00
@@ -250,26 +251,37 @@ for arm in af3_openbind_templateoff_a100 af3kit_off_p2_templateoff_a100 \
 done
 # A job that runs out of wall clock leaves every finished size in <arm>/vram_sweep.tsv; submitting
 # the same line again resumes at the first size not yet recorded.
-pixi run python profiling/plot_vram.py --set af3kit_a100 --runtime --relative      # profiling/results/af3kit_a100/
+pixi run plot-scaling --set af3kit_a100            # results/scaling/sweep/af3kit_a100/
 ```
 
 ## Where figures go, and the relative view
 
-Figures and published tables live under `profiling/results/<set>/`, one directory per named
-comparison in [`results_sets.json`](results_sets.json), with fixed file names, so a re-run
-overwrites rather than accumulates:
+Figures live under `results/scaling/`, in the layout
+[`scripts/figure_layout.py`](../scripts/figure_layout.py) defines for the whole
+repository: `sweep/<set>/` for a comparison of arms, `individual_runs/<arm>/` for one arm
+alone. A set is an entry in [`configs/figure_sets.json`](../configs/figure_sets.json) --
+its arms in legend order, its baseline, its title. File names are fixed, and every figure
+of a directory is rewritten on each invocation, so a re-run overwrites rather than
+accumulates and no figure outlives the table beside it:
 
 | file | what |
 |---|---|
 | `vram_vs_tokens.png` | peak memory vs tokens, absolute |
-| `vram_and_runtime.png` | the same plus model time, absolute (`--runtime`) |
-| `relative_to_<baseline>.png` | every arm **relative to the production engine** on that card: speed-up (baseline time / arm time, >1 faster) and peak memory as a fraction of the baseline's (<1 less), at the token counts both ran (`--relative`) |
-| `<arm>.tsv` | each arm's table, host columns dropped |
+| `runtime_vs_tokens.png` | model time vs tokens, absolute |
+| `ratio_vs_tokens.png` | every arm **relative to the production engine** on that card: speed-up (baseline time / arm time, >1 faster) and peak memory as a fraction of the baseline's (<1 less), at the token counts both ran. Sweeps with a baseline only |
+| `metrics.tsv` | every plotted row, host columns dropped |
+| `manifest.json` | the arms in legend order, the baseline, each arm's source table and row count, the figures written, the commit that drew them |
 
 ```bash
-pixi run python profiling/plot_vram.py --set af3kit_a100 --runtime     # absolute
-pixi run python profiling/plot_vram.py --set af3kit_a100 --relative    # vs the set's baseline
+pixi run plot-scaling --set af3kit_a100                  # the set's directory
+pixi run plot-scaling --set af3kit_a100 --no-individual  # without the per-arm directories
 ```
+
+Each arm's colour, marker and line style come from
+[`configs/arm_style.json`](../configs/arm_style.json) and never change between figures, so
+the same curve is the same arm everywhere. Two arms in one figure may not share a colour;
+the plotting scripts refuse rather than draw them the same. Where two arms' curves coincide
+(`off` under `exact`, `big` under `big` with the reach gate off) the dashed one stays visible.
 
 The relative figure is the one a decision reads off: it answers "how much faster or slower than
 what we run today, at the sizes we run". Two things to keep in mind when reading it.
@@ -362,4 +374,10 @@ killer) is not a GPU limit and is reported separately.
 | `sweep.sbatch` | hold one GPU, walk the grid upwards, stop at the first failure |
 | `run_with_trace.py` | poll `nvidia-smi` around one prediction, classify the outcome |
 | `peak_mem.py` | wrap the engine's entry point, record its own peak-memory counters |
-| `plot_vram.py` | peak VRAM (and optionally model time) vs tokens, per arm |
+| `plot_vram.py` | peak VRAM and model time vs tokens, per arm, into `results/scaling/` |
+| `setup_kit_env.sh` | build the Anthropic kit's virtual environment, step by step |
+
+The figure sets and the per-arm colours are repository-wide, not profiling-specific:
+[`configs/figure_sets.json`](../configs/figure_sets.json),
+[`configs/arm_style.json`](../configs/arm_style.json),
+[`scripts/figure_layout.py`](../scripts/figure_layout.py).
