@@ -20,7 +20,8 @@
 #                        third scoreable arm (symlinks; a sanity check on the harness).
 #   submit-score         The same, as a SLURM job — 2 x <entries> DockQ calls is
 #                        too much for a shared login node.
-#   plot                 Figures into <repo>/results/figures/.
+#   plot                 Figures into <repo>/results/benchmark/, one directory per
+#                        comparison in configs/figure_sets.json (--set for just one).
 #   publish-results      Copy the result tables into <repo>/results/, minus the
 #                        columns that name this cluster (for a public repo).
 #
@@ -107,12 +108,13 @@
 #                        Seconds a task must have left before it starts another
 #                        entry (default 1200). Entries that do not fit are skipped
 #                        and named in the task log, never half-written.
-#   --arm-a / --arm-b    Which two runs `plot` compares (defaults af3_native vs
-#                        af3_openbind). Use --arm-b zheng_af3_local for the
-#                        harness sanity check against the paper's own predictions.
-#   --figures-dir DIR    Where `plot` writes its PNGs. Default: <repo>/results/figures,
-#                        so the figures are committable; pass a path under --base-dir
-#                        to keep them out of the repo.
+#   --set NAME           Which comparison `plot` draws: a benchmark set from
+#                        configs/figure_sets.json (weights, engine, templates,
+#                        vs_paper). Default: every one of them, so the committed
+#                        figures stay in step after new scores.
+#   --figures-dir DIR    Root `plot` writes under, as results/benchmark/{sweep,
+#                        individual_runs}/. Default: <repo>/results, so the figures
+#                        are committable; pass a path under --base-dir to keep them out.
 #   --score-cpus N       cpus-per-task for submit-score (default 32); the scoring
 #                        script's --jobs is set from it.
 #   --select-by X        best (AF3 ranking_score, default) | maxiptm.
@@ -135,7 +137,8 @@
 #   logs/<stage>/          SLURM .out files
 #   results/               profiling.tsv, dockq.tsv
 # and, in the repo itself:
-#   <repo>/results/figures/  the PNGs from --stage plot (see --figures-dir)
+#   <repo>/results/benchmark/sweep/<set>/        the PNGs and tables from --stage plot
+#   <repo>/results/benchmark/individual_runs/<arm>/   the same, one arm at a time
 
 set -euo pipefail
 
@@ -180,8 +183,7 @@ PER_ENTRY_RESERVE=1200
 RESCORE=""
 SCORE_CPUS=32
 FIGURES_DIR_OVERRIDE=""
-ARM_A="af3_native"
-ARM_B="af3_openbind"
+FIGURE_SET=""
 SELECT_BY="best"
 DRY_RUN=0
 PIXI_RUN=""
@@ -201,8 +203,7 @@ while [[ $# -gt 0 ]]; do
         --array-spec)  ARRAY_SPEC=$(_val "$@"); shift 2 ;;
         --score-cpus)  SCORE_CPUS=$(_val "$@"); shift 2 ;;
         --figures-dir) FIGURES_DIR_OVERRIDE=$(_val "$@"); shift 2 ;;
-        --arm-a)       ARM_A=$(_val "$@"); shift 2 ;;
-        --arm-b)       ARM_B=$(_val "$@"); shift 2 ;;
+        --set)         FIGURE_SET=$(_val "$@"); shift 2 ;;
         --select-by)   SELECT_BY=$(_val "$@"); shift 2 ;;
         --rescore)     RESCORE=yes; shift ;;
         --dry-run)     DRY_RUN=1; shift ;;
@@ -231,7 +232,7 @@ RESULTS_DIR="$BASE_DIR/results"
 # Figures go INTO THE REPO by default: they are small, they are the thing worth
 # sharing, and keeping them next to the code that produced them is the point of
 # a self-contained repository. Override with --figures-dir to keep them out.
-FIGURES_DIR="${FIGURES_DIR_OVERRIDE:-$SCRIPT_DIR/results/figures}"
+FIGURES_DIR="${FIGURES_DIR_OVERRIDE:-$SCRIPT_DIR/results}"
 
 # Run python through pixi so the analysis stages use the locked environment.
 if [[ -z "$PIXI_RUN" ]]; then
@@ -656,8 +657,17 @@ plot)
     if [[ -d "$RESULTS_DIR/profiling" ]]; then ARGS+=(--profile "$RESULTS_DIR/profiling")
     elif [[ -f "$RESULTS_DIR/profiling.tsv" ]]; then ARGS+=(--profile "$RESULTS_DIR/profiling.tsv"); fi
     [[ ${#ARGS[@]} -gt 0 ]] || { echo "ERROR: no dockq or profiling results in $RESULTS_DIR" >&2; exit 1; }
-    "${PY[@]}" "$SCRIPT_DIR/scripts/06_plot_comparison.py" \
-        "${ARGS[@]}" --arm-a "$ARM_A" --arm-b "$ARM_B" --out-dir "$FIGURES_DIR"
+    # No --set means every registered benchmark set, which is what keeps the committed
+    # figures in step with each other: a re-plot after new scores refreshes all of them.
+    SETS=("$FIGURE_SET")
+    if [[ -z "$FIGURE_SET" ]]; then
+        mapfile -t SETS < <("${PY[@]}" -c "import json,sys; sets=json.load(open('$SCRIPT_DIR/configs/figure_sets.json')); print('\n'.join(k for k,v in sets.items() if not k.startswith('_') and v.get('experiment')=='benchmark'))")
+    fi
+    for set_name in "${SETS[@]}"; do
+        echo "=== set: $set_name"
+        "${PY[@]}" "$SCRIPT_DIR/scripts/06_plot_comparison.py" \
+            "${ARGS[@]}" --set "$set_name" --results-root "$FIGURES_DIR"
+    done
     ;;
 
 publish-results)

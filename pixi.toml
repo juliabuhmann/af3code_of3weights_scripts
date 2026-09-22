@@ -57,5 +57,10 @@ collect-profile = "python scripts/04_collect_profiling.py"
 score-dockq     = "python scripts/05_score_dockq.py"
 plot            = "python scripts/06_plot_comparison.py"
 
+# Figures. Both take --set NAME from configs/figure_sets.json and write one directory
+# under results/<experiment>/, with fixed file names; see scripts/figure_layout.py.
+plot-benchmark  = "python scripts/06_plot_comparison.py"
+plot-scaling    = "python profiling/plot_vram.py"
+
 # Sanity check that the DockQ the scoring stage shells out to is the pinned version.
 dockq-version = "python -c \"import importlib.metadata as m; print('DockQ', m.version('DockQ'))\""

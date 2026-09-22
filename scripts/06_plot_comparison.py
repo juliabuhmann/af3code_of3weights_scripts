@@ -1,57 +1,56 @@
 #!/usr/bin/env python3
 """
-Stage 06 — figures comparing two arms on accuracy and on cost.
+Stage 06 -- accuracy and cost on Benchmark-IV, for a registered set of arms.
 
-Takes the tables the previous stages wrote and produces, in --out-dir:
+Reads the per-arm tables stages 04 and 05 wrote and writes, for a set from
+configs/figure_sets.json (or an ad-hoc list of arms):
 
-    dockq_scatter.png        per-entry DockQ, arm A (x) vs arm B (y), y=x dashed,
-                             coloured by category. The headline: does swapping the
-                             weights move individual complexes, and which way?
-    dockq_distribution.png   ECDF + paired-difference histogram over the common set
-                             (entries scored in BOTH arms — the only fair comparison).
-    runtime_vs_size.png      model time against complex size, one series per arm.
-                             Cost as a function of input size — the figure that shows
-                             a crossover a single median would hide.
-    runtime_paired.png       model time, arm A vs arm B, one point per complex.
+    results/benchmark/sweep/<set>/
+        dockq_distribution.png   ECDF per arm over the common set, plus the paired
+                                 difference against the baseline
+        runtime_vs_size.png      model time against complex size, one series per arm --
+                                 cost as a function of input size, which a median hides
+        dockq_scatter.png        per-entry DockQ, baseline (x) vs the other arm (y),
+                                 coloured by category. Two arms only: the headline of a
+                                 pairwise comparison, meaningless for three
+        runtime_paired.png       model time, baseline vs the other arm, per complex.
+                                 Two arms only
+        metrics.tsv              per-arm summary over the common set
+        complexes_evaluated.tsv  the entries every arm scored, with each arm's values
+        manifest.json            arms in legend order, baseline, source tables, commit
 
-Every aggregate is computed over the COMMON SET — entries present in both arms — so a
+    results/benchmark/individual_runs/<arm>/
+        dockq_distribution.png, runtime_vs_size.png, metrics.tsv, manifest.json
+
+Every aggregate is computed over the COMMON SET -- entries present in every arm -- so a
 difference in how many entries each arm completed cannot masquerade as a difference in
-quality. The n is reported for every figure: on the panel where there is room, and on
-stdout for dockq_scatter.png, which is kept free of a summary box so the points are
-the only thing in the plotting area.
+quality. The n is reported on every figure or on stdout beside it.
 
-LABELS: TAGS, AND ONLY WHAT DIFFERS
------------------------------------
-Each arm carries a short `tag` naming its pipeline — "AF3 code / openbind" — set in
-its config and copied into every result row (see scripts/arm_metadata.py). Figures
-use that rather than the arm's directory name.
+LABELS AND COLOURS. Each arm carries a short `tag` naming its pipeline ("AF3 code /
+openbind weights"), set in its config and copied into every result row (see
+scripts/arm_metadata.py); figures use that rather than the directory name. The template
+state is appended only when the arms plotted disagree on it -- comparing templates-on
+against templates-off it is the whole point of the figure, comparing two templates-off
+arms it is shared context that belongs in the caption. Colours come from
+configs/arm_style.json: one fixed hue per arm across every figure in the repository.
 
-The template state is appended to the tag ONLY when the two arms being plotted
-disagree on it. Comparing templates-on against templates-off, it is the whole point
-of the figure and has to be visible; comparing two templates-off arms it is shared
-context that belongs in the caption, and repeating it on every series just crowds the
-legend. An arm whose state is unknown is never assumed — it shows as "templates ?".
-
-Legends sit OUTSIDE the axes so no data point is hidden behind them, and every figure
-is saved with bbox_inches="tight" so a long title or an outside legend cannot be
-cropped.
-
-Runtime figures default to `model_s` (featurisation + inference), which is the column
-comparable ACROSS engines; --runtime-column inference_s restricts them to AF3's
-inference timer, which OF3 rows do not have.
+Runtime figures default to `model_s` (featurisation + inference), the column comparable
+ACROSS engines; --runtime-column inference_s restricts them to AlphaFold 3's inference
+timer, which OpenFold3 rows do not have.
 
 Usage:
-    pixi run python scripts/06_plot_comparison.py \
-        --dockq   <base>/results/dockq \
-        --profile <base>/results/profiling \
-        --arm-a af3_native --arm-b af3_openbind \
-        --out-dir <base>/results/figures
+    pixi run plot-benchmark --set engine
+    pixi run plot-benchmark --arms af3_native af3_openbind --baseline af3_native
 """
+
+from __future__ import annotations
 
 import argparse
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import figure_layout as fl
 from result_tables import read_rows
 
 import matplotlib
@@ -59,49 +58,31 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-DPI = 150
-
-# Large enough to stay legible when a figure is dropped into a document at half
-# width, which is how these end up being read.
-plt.rcParams.update({
-    "font.size": 14,
-    "axes.titlesize": 17,
-    "axes.labelsize": 15,
-    "xtick.labelsize": 13,
-    "ytick.labelsize": 13,
-    "legend.fontsize": 12,
-})
-
-CATEGORY_COLOURS = {
-    "homodimer": "#4C72B0",
-    "heterodimer": "#DD8452",
-    "homomer": "#55A868",
-    "heteromer": "#C44E52",
-}
-ARM_COLOURS = ("#4C72B0", "#DD8452")
+EXPERIMENT = "benchmark"
+SCRIPT = "scripts/06_plot_comparison.py"
 TEMPLATE_STATE = {"true": "templates on", "false": "templates off", "": "templates ?"}
+# The four DockQ categories: a second, independent identity channel inside one figure,
+# so they take their own slots from the same validated palette.
+CATEGORY_COLOURS = {
+    "homodimer": "#2a78d6",
+    "heterodimer": "#eb6834",
+    "homomer": "#1baf7a",
+    "heteromer": "#e34948",
+}
+DOCKQ_THRESHOLDS = ((0.23, "acceptable"), (0.49, "medium"), (0.80, "high"))
 
 
-def read_tsv(path: Path) -> list[dict]:
-    """One .tsv, or every .tsv in a directory concatenated.
-
-    Stages 04 and 05 write one table per arm, so --dockq and --profile normally point
-    at those directories; a single combined file still works unchanged.
-    """
-    return read_rows(path)
-
-
-def as_float(value: str) -> float | None:
+def as_float(value) -> float | None:
     try:
         return float(value)
     except (TypeError, ValueError):
         return None
 
 
-def by_entry(rows: list[dict], run: str, column: str) -> dict[str, float]:
+def by_entry(rows: list[dict], arm: str, column: str) -> dict[str, float]:
     out = {}
     for row in rows:
-        if row.get("run") != run:
+        if row.get("run") != arm:
             continue
         value = as_float(row.get(column, ""))
         if value is not None:
@@ -109,12 +90,10 @@ def by_entry(rows: list[dict], run: str, column: str) -> dict[str, float]:
     return out
 
 
-def _field(rows: list[dict], arm: str, column: str, default: str = "") -> str:
-    """One arm's value for `column`, or a "/"-joined string if the arm disagrees.
-
-    Read off the rows rather than passed in, so a label cannot disagree with the data
-    being plotted. A disagreement within one arm is surfaced, not silently reduced.
-    """
+def field(rows: list[dict], arm: str, column: str, default: str = "") -> str:
+    """One arm's value for `column`, or a "/"-joined string when the arm disagrees with
+    itself. Read off the rows rather than passed in, so a label cannot disagree with the
+    data being plotted."""
     values = {r.get(column, "") for r in rows if r.get("run") == arm}
     values.discard("")
     if len(values) == 1:
@@ -124,231 +103,299 @@ def _field(rows: list[dict], arm: str, column: str, default: str = "") -> str:
     return default
 
 
-def arm_labels(rows: list[dict], arm_a: str, arm_b: str) -> tuple[str, str]:
-    """Legend and axis labels for the pair, spelling out only what DIFFERS.
-
-    See "LABELS: TAGS, AND ONLY WHAT DIFFERS" in the module docstring. If the two
-    tags collide and the template state does not separate them either, the arm names
-    are appended — two series must never carry the same label.
-    """
-    tags = {arm: _field(rows, arm, "tag", default=arm) or arm for arm in (arm_a, arm_b)}
-    states = {arm: _field(rows, arm, "use_templates") for arm in (arm_a, arm_b)}
-
-    labels = dict(tags)
-    if states[arm_a] != states[arm_b]:
-        for arm in (arm_a, arm_b):
-            labels[arm] = f"{tags[arm]} ({TEMPLATE_STATE.get(states[arm], 'templates ?')})"
-    if labels[arm_a] == labels[arm_b]:
-        labels[arm_a] = f"{labels[arm_a]} [{arm_a}]"
-        labels[arm_b] = f"{labels[arm_b]} [{arm_b}]"
-    return labels[arm_a], labels[arm_b]
+def arm_labels(rows: list[dict], arms: list[str]) -> dict[str, str]:
+    """Legend labels spelling out only what DIFFERS; never two series with one label."""
+    labels = {a: field(rows, a, "tag", default=a) or a for a in arms}
+    states = {a: field(rows, a, "use_templates") for a in arms}
+    if len(set(states.values())) > 1:
+        labels = {a: f"{labels[a]} ({TEMPLATE_STATE.get(states[a], 'templates ?')})" for a in arms}
+    for arm in arms:
+        if list(labels.values()).count(labels[arm]) > 1:
+            labels[arm] = f"{labels[arm]} [{arm}]"
+    return labels
 
 
-def outside_legend(ax, **kwargs) -> None:
-    """Legend to the right of the axes, so it can never cover a data point."""
-    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0,
-              frameon=False, **kwargs)
+def common_entries(rows: list[dict], arms: list[str], column: str) -> tuple[list[str], dict]:
+    """Entries every arm has a value for, and each arm's values."""
+    values = {a: by_entry(rows, a, column) for a in arms}
+    common = sorted(set.intersection(*(set(v) for v in values.values()))) if values else []
+    return common, values
 
 
-def annotate_n(ax, text: str) -> None:
-    ax.text(0.02, 0.98, text, transform=ax.transAxes, va="top", ha="left",
-            fontsize=12, color="#333333",
-            bbox=dict(boxstyle="round,pad=0.4", fc="white", ec="#cccccc", alpha=0.9))
+def annotate(ax, text: str) -> None:
+    ax.text(0.02, 0.98, text, transform=ax.transAxes, va="top", ha="left", fontsize=11.5,
+            color=fl.INK_TEXT,
+            bbox=dict(boxstyle="round,pad=0.4", fc="white", ec=fl.INK_FAINT, alpha=0.92))
 
 
-def save(fig, path: Path, note: str = "") -> None:
-    """bbox_inches='tight' is what guarantees titles and outside legends survive.
+# --------------------------------------------------------------------------- figures
 
-    tight_layout() is deliberately NOT used: it reserves space only for artists
-    inside the axes, so a legend anchored outside them gets clipped instead.
-    """
-    fig.savefig(path, dpi=DPI, bbox_inches="tight", pad_inches=0.25)
-    plt.close(fig)
-    print(f"  {path.name}{'  ' + note if note else ''}")
-
-
-def plot_dockq_scatter(dockq_rows, arm_a, arm_b, out_dir) -> None:
-    a = by_entry(dockq_rows, arm_a, "dockq")
-    b = by_entry(dockq_rows, arm_b, "dockq")
-    common = sorted(set(a) & set(b))
+def plot_dockq_distribution(rows, arms, labels, styles, baseline, out, title) -> Path | None:
+    common, values = common_entries(rows, arms, "dockq")
     if not common:
-        print("  dockq_scatter: no entries scored in both arms, skipping")
-        return
-    label_a, label_b = arm_labels(dockq_rows, arm_a, arm_b)
-    category = {r["entry_id"]: r.get("category", "") for r in dockq_rows}
-
-    fig, ax = plt.subplots(figsize=(7.2, 6.4))
-    for cat in sorted({category.get(e, "") for e in common}):
-        pts = [(a[e], b[e]) for e in common if category.get(e, "") == cat]
-        if not pts:
-            continue
-        xs, ys = zip(*pts)
-        ax.scatter(xs, ys, s=34, alpha=0.75, label=f"{cat or 'uncategorised'} (n={len(pts)})",
-                   color=CATEGORY_COLOURS.get(cat, "#888888"),
-                   edgecolor="white", linewidth=0.5)
-    ax.plot([0, 1], [0, 1], ls="--", lw=1.2, color="#999999", zorder=0)
-    ax.set_xlim(-0.02, 1.02)
-    ax.set_ylim(-0.02, 1.02)
-    ax.set_xlabel(f"DockQ — {label_a}")
-    ax.set_ylabel(f"DockQ — {label_b}")
-    ax.set_title("Per-complex DockQ")
-    outside_legend(ax, title="category")
-
-    # No on-figure summary box here: the per-category legend already carries the ns,
-    # and the aggregates belong in the caption. They are printed to stdout instead so
-    # the numbers are still available without crowding the panel.
-    deltas = np.array([b[e] - a[e] for e in common])
-    better = int((deltas > 0.05).sum())
-    worse = int((deltas < -0.05).sum())
-    save(fig, out_dir / "dockq_scatter.png", f"(n={len(common)})")
-    print(f"    n={len(common)}  median Δ={np.median(deltas):+.3f}  "
-          f"{better} better / {worse} worse by >0.05")
-
-
-def plot_dockq_distribution(dockq_rows, arm_a, arm_b, out_dir) -> None:
-    a = by_entry(dockq_rows, arm_a, "dockq")
-    b = by_entry(dockq_rows, arm_b, "dockq")
-    common = sorted(set(a) & set(b))
-    if not common:
-        print("  dockq_distribution: no common entries, skipping")
-        return
-    label_a, label_b = arm_labels(dockq_rows, arm_a, arm_b)
-    va = np.array([a[e] for e in common])
-    vb = np.array([b[e] for e in common])
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15.0, 5.6))
-
-    for values, label, colour in ((va, label_a, ARM_COLOURS[0]),
-                                  (vb, label_b, ARM_COLOURS[1])):
-        xs = np.sort(values)
+        print("  dockq_distribution: no entries scored in every arm, skipping")
+        return None
+    paired = baseline is not None and len(arms) == 2
+    fig, axes = plt.subplots(1, 2 if paired else 1, figsize=(14.0 if paired else 8.0, 5.6),
+                             squeeze=False)
+    ax1 = axes[0][0]
+    for arm in arms:
+        xs = np.sort(np.array([values[arm][e] for e in common]))
         ys = np.arange(1, len(xs) + 1) / len(xs)
-        ax1.step(xs, ys, where="post", lw=2.4, color=colour,
-                 label=f"{label}\nmedian {np.median(values):.3f}")
-    for threshold, name in ((0.23, "acceptable"), (0.49, "medium"), (0.80, "high")):
-        ax1.axvline(threshold, ls=":", lw=1, color="#aaaaaa")
-        ax1.text(threshold, 0.02, f" {name}", rotation=90, fontsize=11,
-                 color="#888888", va="bottom")
+        ax1.step(xs, ys, where="post", color=styles[arm]["color"],
+                 label=f"{labels[arm]}\nmedian {np.median(xs):.3f}")
+    for threshold, name in DOCKQ_THRESHOLDS:
+        ax1.axvline(threshold, ls=":", lw=1.0, color=fl.INK_FAINT, zorder=0)
+        ax1.text(threshold, 0.02, f" {name}", rotation=90, fontsize=10.5, color=fl.INK_MUTED,
+                 va="bottom")
     ax1.set_xlabel("DockQ")
     ax1.set_ylabel("cumulative fraction of complexes")
     ax1.set_title(f"DockQ distribution (common set, n={len(common)})")
-    ax1.legend(loc="upper left", frameon=False)
+    if len(arms) > 1:
+        ax1.legend(loc="upper left")
 
-    deltas = vb - va
-    ax2.hist(deltas, bins=30, color="#7f7f7f", edgecolor="white")
-    ax2.axvline(0, ls="--", lw=1.2, color="#333333")
-    ax2.set_xlabel(f"Δ DockQ   ({label_b} − {label_a})")
-    ax2.set_ylabel("complexes")
-    ax2.set_title("Paired difference")
-    annotate_n(ax2, f"median {np.median(deltas):+.3f}\n"
-                    f"mean {deltas.mean():+.3f}\n"
-                    f"n={len(deltas)}")
-    save(fig, out_dir / "dockq_distribution.png", f"(n={len(common)})")
+    if paired:
+        other = next(a for a in arms if a != baseline)
+        deltas = np.array([values[other][e] - values[baseline][e] for e in common])
+        ax2 = axes[0][1]
+        ax2.hist(deltas, bins=30, color=styles[other]["color"], edgecolor="white", linewidth=1.2)
+        ax2.axvline(0, ls="--", lw=1.2, color=fl.INK_MUTED)
+        ax2.set_xlabel(f"Δ DockQ   ({labels[other]} − {labels[baseline]})")
+        ax2.set_ylabel("complexes")
+        ax2.set_title("Paired difference")
+        annotate(ax2, f"median {np.median(deltas):+.3f}\nmean {deltas.mean():+.3f}\nn={len(deltas)}")
+    if title:
+        # Above the panel titles, not across them: y > 1 works because every figure is
+        # saved with bbox_inches="tight".
+        fig.suptitle(title, fontsize=14, fontweight="bold", color="#22221f",
+                     x=0.0, y=1.06, ha="left", va="bottom")
+    return fl.save(fig, out / "dockq_distribution.png", f"(n={len(common)})")
 
 
-def plot_metric_vs_size(profile_rows, arm_a, arm_b, column, ylabel,
-                        title, filename, out_dir) -> None:
-    size = {}
-    for row in profile_rows:
-        value = as_float(row.get("total_len", ""))
-        if value is not None:
-            size[row["entry_id"]] = value
-    labels = dict(zip((arm_a, arm_b), arm_labels(profile_rows, arm_a, arm_b)))
-
+def plot_runtime_vs_size(rows, arms, labels, styles, column, out, title) -> Path | None:
+    size = {r["entry_id"]: v for r in rows if (v := as_float(r.get("total_len", ""))) is not None}
     fig, ax = plt.subplots(figsize=(9.0, 5.6))
     plotted = False
-    for arm, colour in zip((arm_a, arm_b), ARM_COLOURS):
-        values = by_entry(profile_rows, arm, column)
-        pts = [(size[e], v) for e, v in values.items() if e in size]
+    for arm in arms:
+        values = by_entry(rows, arm, column)
+        pts = sorted((size[e], v) for e, v in values.items() if e in size)
         if not pts:
             continue
-        xs, ys = zip(*sorted(pts))
-        ax.scatter(xs, ys, s=32, alpha=0.75, color=colour, edgecolor="white",
-                   linewidth=0.5,
+        xs, ys = zip(*pts)
+        ax.scatter(xs, ys, s=34, alpha=0.8, color=styles[arm]["color"], marker=styles[arm]["marker"],
+                   edgecolor="white", linewidth=0.8,
                    label=f"{labels[arm]}\nn={len(pts)}, median {np.median(ys):.0f} s")
         plotted = True
     if not plotted:
-        print(f"  {filename}: no data in column '{column}', skipping")
         plt.close(fig)
-        return
+        print(f"  runtime_vs_size: no data in column '{column}', skipping")
+        return None
     ax.set_xlabel("complex size (summed chain length, residues)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    outside_legend(ax)
-    ax.grid(alpha=0.25, lw=0.5)
-    save(fig, out_dir / filename)
+    ax.set_ylabel(f"{column} (s)")
+    ax.set_title(title or f"Model time ({column}) vs complex size")
+    if len(arms) > 1:
+        fl.outside_legend(ax)
+    return fl.save(fig, out / "runtime_vs_size.png")
 
 
-def plot_runtime_paired(profile_rows, arm_a, arm_b, column, out_dir) -> None:
-    a = by_entry(profile_rows, arm_a, column)
-    b = by_entry(profile_rows, arm_b, column)
-    common = sorted(set(a) & set(b))
+def plot_dockq_scatter(rows, arms, labels, baseline, out) -> Path | None:
+    """Two arms only: per-entry DockQ, baseline on x. Colour carries the category here,
+    which is why this figure exists for a pair and not for a set."""
+    other = next(a for a in arms if a != baseline)
+    common, values = common_entries(rows, arms, "dockq")
     if not common:
-        print(f"  runtime_paired: no entries timed in both arms "
-              f"(column '{column}'), skipping")
-        return
-    label_a, label_b = arm_labels(profile_rows, arm_a, arm_b)
-    xs = np.array([a[e] for e in common])
-    ys = np.array([b[e] for e in common])
-
+        print("  dockq_scatter: no entries scored in both arms, skipping")
+        return None
+    category = {r["entry_id"]: r.get("category", "") for r in rows}
     fig, ax = plt.subplots(figsize=(7.2, 6.4))
-    ax.scatter(xs, ys, s=34, alpha=0.75, color="#4C72B0",
-               edgecolor="white", linewidth=0.5)
+    for cat in sorted({category.get(e, "") for e in common}):
+        pts = [(values[baseline][e], values[other][e]) for e in common
+               if category.get(e, "") == cat]
+        if not pts:
+            continue
+        xs, ys = zip(*pts)
+        ax.scatter(xs, ys, s=34, alpha=0.8, color=CATEGORY_COLOURS.get(cat, fl.INK_MUTED),
+                   edgecolor="white", linewidth=0.8, label=f"{cat or 'uncategorised'} (n={len(pts)})")
+    ax.plot([0, 1], [0, 1], ls="--", lw=1.2, color=fl.INK_MUTED, zorder=0)
+    ax.set_xlim(-0.02, 1.02)
+    ax.set_ylim(-0.02, 1.02)
+    ax.set_xlabel(f"DockQ — {labels[baseline]}")
+    ax.set_ylabel(f"DockQ — {labels[other]}")
+    ax.set_title("Per-complex DockQ")
+    fl.outside_legend(ax, title="category")
+    # No summary box: the legend carries the ns and the aggregates belong in the caption.
+    deltas = np.array([values[other][e] - values[baseline][e] for e in common])
+    path = fl.save(fig, out / "dockq_scatter.png", f"(n={len(common)})")
+    print(f"    n={len(common)}  median Δ={np.median(deltas):+.3f}  "
+          f"{int((deltas > 0.05).sum())} better / {int((deltas < -0.05).sum())} worse by >0.05")
+    return path
+
+
+def plot_runtime_paired(rows, arms, labels, styles, baseline, column, out) -> Path | None:
+    other = next(a for a in arms if a != baseline)
+    common, values = common_entries(rows, arms, column)
+    if not common:
+        print(f"  runtime_paired: no entries timed in both arms (column '{column}'), skipping")
+        return None
+    xs = np.array([values[baseline][e] for e in common])
+    ys = np.array([values[other][e] for e in common])
+    fig, ax = plt.subplots(figsize=(7.2, 6.4))
+    ax.scatter(xs, ys, s=34, alpha=0.8, color=styles[other]["color"], marker=styles[other]["marker"],
+               edgecolor="white", linewidth=0.8)
     hi = max(xs.max(), ys.max()) * 1.05
-    ax.plot([0, hi], [0, hi], ls="--", lw=1.2, color="#999999", zorder=0)
+    ax.plot([0, hi], [0, hi], ls="--", lw=1.2, color=fl.INK_MUTED, zorder=0)
     ax.set_xlim(0, hi)
     ax.set_ylim(0, hi)
-    ax.set_xlabel(f"{column} (s) — {label_a}")
-    ax.set_ylabel(f"{column} (s) — {label_b}")
+    ax.set_xlabel(f"{column} (s) — {labels[baseline]}")
+    ax.set_ylabel(f"{column} (s) — {labels[other]}")
     ax.set_title(f"Model time per complex ({column})")
     ratio = float(np.median(ys / np.where(xs == 0, np.nan, xs)))
-    annotate_n(ax, f"n={len(common)}\n"
-                   f"median x {np.median(xs):.1f} s\n"
-                   f"median y {np.median(ys):.1f} s\n"
-                   f"median ratio {ratio:.2f}x")
-    save(fig, out_dir / "runtime_paired.png", f"(n={len(common)})")
+    annotate(ax, f"n={len(common)}\nmedian x {np.median(xs):.1f} s\nmedian y {np.median(ys):.1f} s\n"
+                 f"median ratio {ratio:.2f}x")
+    return fl.save(fig, out / "runtime_paired.png", f"(n={len(common)})")
+
+
+# ----------------------------------------------------------------------------- tables
+
+def metrics_rows(dockq_rows, profile_rows, arms, labels, baseline, column) -> list[dict]:
+    """One row per arm: the aggregates over the common set, the denominator stated."""
+    dq_common, dq = common_entries(dockq_rows, arms, "dockq") if dockq_rows else ([], {})
+    rt_common, rt = common_entries(profile_rows, arms, column) if profile_rows else ([], {})
+    out = []
+    for arm in arms:
+        row = {"run": arm, "label": labels[arm], "is_baseline": str(arm == baseline).lower()}
+        if dq_common:
+            v = np.array([dq[arm][e] for e in dq_common])
+            row.update({"n_common_dockq": len(dq_common), "dockq_median": f"{np.median(v):.4f}",
+                        "dockq_mean": f"{v.mean():.4f}",
+                        "n_scored": len(by_entry(dockq_rows, arm, "dockq"))})
+            for threshold, name in DOCKQ_THRESHOLDS:
+                row[f"frac_{name}"] = f"{float((v >= threshold).mean()):.4f}"
+            if baseline and arm != baseline:
+                d = v - np.array([dq[baseline][e] for e in dq_common])
+                row.update({"dockq_delta_median": f"{np.median(d):+.4f}",
+                            "n_better_005": int((d > 0.05).sum()),
+                            "n_worse_005": int((d < -0.05).sum())})
+        if rt_common:
+            t = np.array([rt[arm][e] for e in rt_common])
+            row.update({"n_common_runtime": len(rt_common), f"{column}_median": f"{np.median(t):.1f}",
+                        f"{column}_total": f"{t.sum():.0f}"})
+            if baseline and arm != baseline:
+                b = np.array([rt[baseline][e] for e in rt_common])
+                row["speedup_median"] = f"{float(np.median(b / np.where(t == 0, np.nan, t))):.2f}"
+        out.append(row)
+    return out
+
+
+def evaluated_rows(dockq_rows, profile_rows, arms, column) -> list[dict]:
+    """The common set itself: one row per entry, each arm's DockQ and model time."""
+    dq_common, dq = common_entries(dockq_rows, arms, "dockq") if dockq_rows else ([], {})
+    _, rt = common_entries(profile_rows, arms, column) if profile_rows else ([], {})
+    meta = {r["entry_id"]: r for r in dockq_rows}
+    rows = []
+    for entry in dq_common:
+        row = {"entry_id": entry, "category": meta.get(entry, {}).get("category", ""),
+               "n_chains": meta.get(entry, {}).get("n_chains", ""),
+               "total_len": meta.get(entry, {}).get("total_len", "")}
+        for arm in arms:
+            row[f"dockq__{arm}"] = f"{dq[arm][entry]:.4f}"
+            if rt.get(arm, {}).get(entry) is not None:
+                row[f"{column}__{arm}"] = f"{rt[arm][entry]:.1f}"
+        rows.append(row)
+    return rows
+
+
+def write_directory(dockq_rows, profile_rows, arms, labels, styles, baseline, *, out, column,
+                    set_name, title, sources, missing) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    figures = []
+    if dockq_rows:
+        figures.append(plot_dockq_distribution(dockq_rows, arms, labels, styles, baseline, out, title))
+        if baseline and len(arms) == 2:
+            figures.append(plot_dockq_scatter(dockq_rows, arms, labels, baseline, out))
+    if profile_rows:
+        figures.append(plot_runtime_vs_size(profile_rows, arms, labels, styles, column, out, title))
+        if baseline and len(arms) == 2:
+            figures.append(plot_runtime_paired(profile_rows, arms, labels, styles, baseline,
+                                               column, out))
+    fl.write_table(out / "metrics.tsv",
+                   metrics_rows(dockq_rows, profile_rows, arms, labels, baseline, column))
+    if len(arms) > 1 and dockq_rows:
+        fl.write_table(out / "complexes_evaluated.tsv",
+                       evaluated_rows(dockq_rows, profile_rows, arms, column))
+    fl.write_manifest(out, experiment=EXPERIMENT, script=SCRIPT, set_name=set_name, title=title,
+                      arms=arms, baseline=baseline, sources=sources,
+                      figures=[f for f in figures if f], missing=missing,
+                      extra={"runtime_column": column})
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--set", dest="set_name", default=None,
+                    help="A benchmark set from configs/figure_sets.json: its arms, baseline and "
+                         "title; written to results/benchmark/sweep/<set>/")
+    ap.add_argument("--arms", nargs="*", default=None,
+                    help="Arms to compare instead, in legend order")
+    ap.add_argument("--baseline", default=None,
+                    help="Arm the paired figures compare against (default: the set's `baseline`)")
+    ap.add_argument("--sets-file", type=Path, default=fl.SETS_FILE)
     ap.add_argument("--dockq", type=Path,
-                    help="scripts/05 output: the per-arm directory "
-                         "(<base>/results/dockq) or a single combined .tsv")
+                    help="scripts/05 output: the per-arm directory (<base>/results/dockq) "
+                         "or a single combined .tsv")
     ap.add_argument("--profile", type=Path,
-                    help="scripts/04 output: the per-arm directory "
-                         "(<base>/results/profiling) or a single combined .tsv")
-    ap.add_argument("--arm-a", default="af3_native")
-    ap.add_argument("--arm-b", default="af3_openbind")
+                    help="scripts/04 output: the per-arm directory (<base>/results/profiling) "
+                         "or a single combined .tsv")
     ap.add_argument("--runtime-column", default="model_s",
                     choices=["model_s", "inference_s", "wall_s"],
-                    help="Which timing column the runtime figures use. model_s "
-                         "(default) is featurisation+inference and is the only one "
-                         "comparable across engines; inference_s is AF3-only.")
-    ap.add_argument("--out-dir", required=True, type=Path)
+                    help="Which timing column the runtime figures use. model_s (default) is "
+                         "featurisation+inference and is the only one comparable across engines.")
+    ap.add_argument("--results-root", type=Path, default=fl.RESULTS_ROOT)
+    ap.add_argument("--no-individual", action="store_true",
+                    help="Write only the sweep directory, not one directory per arm")
     args = ap.parse_args()
 
     if not args.dockq and not args.profile:
-        raise SystemExit("Nothing to plot: pass --dockq and/or --profile")
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Figures -> {args.out_dir}")
+        sys.exit("ERROR: nothing to plot: pass --dockq and/or --profile")
+    set_name, arms, baseline, title = fl.resolve_selection(args, EXPERIMENT)
+    styles = fl.styles_for(arms)
+    fl.apply_style()
 
-    if args.dockq:
-        rows = [r for r in read_tsv(args.dockq) if r.get("status") == "ok"]
-        print(f"DockQ rows with status=ok: {len(rows)}")
-        print("  labels: {} | {}".format(*arm_labels(rows, args.arm_a, args.arm_b)))
-        plot_dockq_scatter(rows, args.arm_a, args.arm_b, args.out_dir)
-        plot_dockq_distribution(rows, args.arm_a, args.arm_b, args.out_dir)
+    sources: dict[str, dict] = {}
+    dockq_rows = [r for r in read_rows(args.dockq) if r.get("status") == "ok"] if args.dockq else []
+    profile_rows = read_rows(args.profile) if args.profile else []
+    present = {r.get("run") for r in dockq_rows} | {r.get("run") for r in profile_rows}
+    missing = [a for a in arms if a not in present]
+    if missing:
+        print(f"  [WARN] no rows for {', '.join(missing)}; dropped from the figures")
+        arms = [a for a in arms if a not in missing]
+    if not arms:
+        sys.exit("ERROR: none of the set's arms has any rows -- run --stage score / collect-profiling")
+    if baseline in missing:
+        print(f"  [WARN] baseline {baseline} has no rows; no paired figures")
+        baseline = None
+    for arm in arms:
+        sources[arm] = {
+            "dockq_table": fl.relative_source(Path(args.dockq) / f"{arm}.tsv") if args.dockq else None,
+            "dockq_rows": sum(1 for r in dockq_rows if r.get("run") == arm),
+            "profile_table": fl.relative_source(Path(args.profile) / f"{arm}.tsv") if args.profile else None,
+            "profile_rows": sum(1 for r in profile_rows if r.get("run") == arm),
+        }
+    labels = arm_labels(dockq_rows or profile_rows, arms)
+    print("labels: " + " | ".join(labels[a] for a in arms))
 
-    if args.profile:
-        rows = read_tsv(args.profile)
-        print(f"Profiling rows: {len(rows)}")
-        print("  labels: {} | {}".format(*arm_labels(rows, args.arm_a, args.arm_b)))
-        plot_metric_vs_size(rows, args.arm_a, args.arm_b, args.runtime_column,
-                            f"{args.runtime_column} (s)",
-                            f"Model time ({args.runtime_column}) vs complex size",
-                            "runtime_vs_size.png", args.out_dir)
-        plot_runtime_paired(rows, args.arm_a, args.arm_b,
-                            args.runtime_column, args.out_dir)
+    out = fl.sweep_dir(EXPERIMENT, set_name, arms, args.results_root)
+    print(f"sweep -> {out}")
+    write_directory(dockq_rows, profile_rows, arms, labels, styles, baseline, out=out,
+                    column=args.runtime_column, set_name=set_name, title=title,
+                    sources=sources, missing=missing)
+    if not args.no_individual:
+        for arm in arms:
+            out_i = fl.individual_dir(EXPERIMENT, arm, args.results_root)
+            print(f"individual -> {out_i}")
+            write_directory(dockq_rows, profile_rows, [arm], labels, styles, None, out=out_i,
+                            column=args.runtime_column, set_name=None, title=labels[arm],
+                            sources={arm: sources[arm]}, missing=[])
     return 0
 
 
