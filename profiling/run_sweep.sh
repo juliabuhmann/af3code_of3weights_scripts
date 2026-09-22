@@ -166,12 +166,14 @@ af3)
         KIT_ENV="${AF3OF3_KIT_ENV:-$(cfg launcher.kit_env)}"
         KIT_REPO="${AF3OF3_KIT_REPO:-$(cfg launcher.kit_repo)}"
         KIT_CONFIG=$(cfg launcher.kit_config); KIT_MODE=$(cfg launcher.mode); KIT_VARIANT=$(cfg launcher.variant); KIT_LEVERS_OFF=$(cfg launcher.levers_off)
+        KIT_LD="${AF3OF3_KIT_LD:-$(cfg launcher.ld_library_path)}"
         KIT_ENV_VARS=$(python3 -c "import json,sys; e=json.load(open(sys.argv[1])).get('launcher',{}).get('env',{}); print(';'.join(f'{k}={v}' for k,v in e.items()))" "$CONFIG")
         [[ -n "$KIT_MODE" ]] || { echo "ERROR: launcher.mode missing in $CONFIG" >&2; exit 1; }
         [[ -d "$KIT_DIR" && -x "$KIT_ENV/bin/python" && -f "$KIT_REPO/run_alphafold.py" ]] || { echo "ERROR: kit dir, venv or repo copy missing ($KIT_DIR, $KIT_ENV, $KIT_REPO) -- profiling/setup_af3kit_env.sh" >&2; exit 1; }
         [[ -f "$MODEL_DIR/of3_ported_weights.bin.zst" ]] || { echo "ERROR: no converted weights at $MODEL_DIR -- profiling/setup_af3kit_env.sh step 5" >&2; exit 1; }
+        [[ -z "$KIT_LD" || -e "$KIT_LD/libstdc++.so.6" ]] || { echo "ERROR: launcher.ld_library_path has no libstdc++.so.6 ($KIT_LD) -- profiling/setup_af3kit_env.sh" >&2; exit 1; }
         VARS+=("KIT_KIND=$KIT_KIND" "KIT_DIR=$KIT_DIR" "KIT_ENV=$KIT_ENV" "KIT_REPO=$KIT_REPO" "KIT_CONFIG=${KIT_CONFIG:-a100}"
-               "KIT_MODE=$KIT_MODE" "KIT_VARIANT=${KIT_VARIANT:-p2}" "KIT_LEVERS_OFF=$KIT_LEVERS_OFF" "KIT_ENV_VARS=$KIT_ENV_VARS")
+               "KIT_MODE=$KIT_MODE" "KIT_VARIANT=${KIT_VARIANT:-p2}" "KIT_LEVERS_OFF=$KIT_LEVERS_OFF" "KIT_ENV_VARS=$KIT_ENV_VARS" "KIT_LD=$KIT_LD")
         echo "launcher      : $KIT_KIND  mode=$KIT_MODE  variant=${KIT_VARIANT:-p2}  levers_off=${KIT_LEVERS_OFF:-none}  card file=${KIT_CONFIG:-a100}.env"
         echo "kit dir       : $KIT_DIR  ($(cfg launcher.kit_commit))"
         echo "kit env       : $KIT_ENV"

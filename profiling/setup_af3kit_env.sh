@@ -28,6 +28,9 @@
 #      compiled-in search path here; the arm exports it (configs/af3kit_*.json launcher.env).
 #   2. build_data: upstream's post-install step that writes the CCD pickles into the package.
 #   3. torch (CPU): the kit's converter reads the PyTorch checkpoint; the kit pins torch 2.7.1+cpu.
+#   4. A GCC 13 libstdc++ on LD_LIBRARY_PATH: the compiled extension needs GLIBCXX_3.4.32 and
+#      Euler's GPU nodes are not uniform. The kit's container carries its own; a venv must not
+#      depend on whichever node SLURM picks.
 # The openbind fork's four Python-only changes are overlaid too (they are inert for p2 weights;
 # they gate on of3_openbind), so ONE venv serves both weight variants.
 set -euo pipefail
@@ -52,7 +55,16 @@ if ! git -C "$ROOT/uplifting-biomolecular-modeling" apply --check --reverse "$PA
     git -C "$ROOT/uplifting-biomolecular-modeling" apply "$PATCH" && echo "  applied af3_jax_openbind.diff"
 else echo "  af3_jax_openbind.diff already applied"; fi
 
-echo "=== [2/6] venv (python 3.12 = the cached wheel's ABI) + the pinned runtime"
+echo "=== [2/7] a GCC 13 libstdc++ for the venv (deviation 4)"
+# AlphaFold3's compiled extension needs GLIBCXX_3.4.32; Euler's GPU nodes are not uniform (the
+# first submission of these arms ran on eu-a65-05 and failed at import on eu-ts-01). Only the two
+# .so files go on LD_LIBRARY_PATH, so the conda env cannot shadow anything else.
+if [ ! -e "$ROOT/conda_envs/libstdcxx/lib/libstdc++.so.6" ]; then
+    mamba create -y -q -p "$ROOT/conda_envs/libstdcxx" -c conda-forge "libstdcxx-ng>=13" "libgcc-ng>=13"; fi
+mkdir -p "$ROOT/lib-stdcxx"
+for so in libstdc++.so.6 libgcc_s.so.1; do ln -sf "$ROOT/conda_envs/libstdcxx/lib/$so" "$ROOT/lib-stdcxx/$so"; done
+
+echo "=== [3/7] venv (python 3.12 = the cached wheel's ABI) + the pinned runtime"
 [ -x "$VENV/bin/python" ] || uv venv --seed --managed-python --python 3.12 "$VENV"
 # shellcheck disable=SC1091
 source "$VENV/bin/activate"
@@ -60,7 +72,7 @@ python -m pip install -q "jax[cuda12]==0.10.2" "dm-haiku==0.0.16" "tokamax==0.0.
     "absl-py>=2.3.1" "etils[epath]" numpy tqdm zstandard
 python -m pip install -q --index-url https://download.pytorch.org/whl/cpu "torch==2.7.1"      # deviation 3
 
-echo "=== [3/6] the compiled alphafold3 3.1.4 package from the uv cache"
+echo "=== [4/7] the compiled alphafold3 3.1.4 package from the uv cache"
 SP=$(python -c "import site; print(site.getsitepackages()[0])")
 [ -d "$CACHED_WHEEL_DIR/alphafold3" ] || { echo "ERROR: no cached alphafold3_open 3.1.4 at $CACHED_WHEEL_DIR (AF3OF3_AF3_CACHED)" >&2; exit 1; }
 [ -d "$SP/alphafold3" ] || { cp -r "$CACHED_WHEEL_DIR/alphafold3" "$CACHED_WHEEL_DIR"/alphafold3_open-3.1.4.dist-info "$SP/"
@@ -68,7 +80,7 @@ SP=$(python -c "import site; print(site.getsitepackages()[0])")
 export LIBCIFPP_DATA_DIR="$VENV/share/libcifpp"                                                   # deviation 1
 python -c "import alphafold3, alphafold3.cpp"
 
-echo "=== [4/6] the fork's openbind porter (4 Python files) + a writable repo copy"
+echo "=== [5/7] the fork's openbind porter (4 Python files) + a writable repo copy"
 FORK="$ROOT/alphafold3-fork"
 [ -d "$FORK/.git" ] || { git clone -q --filter=blob:none https://github.com/sokrypton/alphafold3 "$FORK"; git -C "$FORK" remote add jb "$FORK_REPO"; }
 git -C "$FORK" fetch -q jb
@@ -79,12 +91,12 @@ git -C "$FORK" show "jb/$FORK_BRANCH:run_alphafold.py" > "$ROOT/af3_repo/run_alp
 git -C "$FORK" show "jb/$FORK_BRANCH:convert_of3_weights.py" > "$ROOT/af3_repo/convert_of3_weights.py"
 [ -f "$SP/alphafold3/constants/converters/ccd.pickle" ] || python -c "from alphafold3.build_data import build_data; build_data()"   # deviation 2
 
-echo "=== [5/6] the kit's weights: fetch, convert, digest-check (the kit's own installer)"
+echo "=== [6/7] the kit's weights: fetch, convert, digest-check (the kit's own installer)"
 export PYTHONPATH="$KIT/opt:$KIT/../common/opt_core" MODEL_OPT="$KIT" AF3_JAX_PY="$VENV/bin/python" AF3_JAX_REPO="$ROOT/af3_repo" PYTHONHASHSEED=0
 mkdir -p "$ROOT/weights/af3_jax"
 ( cd "$KIT" && bash run.sh install --config a100 --weights "$ROOT/weights/af3_jax" ) | grep -E "CONVERT|WEIGHTS|NOT MET" || true
 
-echo "=== [6/6] verify"
+echo "=== [7/7] verify"
 python - <<'PY'
 import inspect
 from alphafold3.model.network import modules, diffusion_transformer
@@ -101,4 +113,5 @@ paths for configs/af3kit_*.json launcher block:
   kit_repo    : $ROOT/af3_repo
   model_dir   : $ROOT/weights/af3_jax/p2
   env         : LIBCIFPP_DATA_DIR=$VENV/share/libcifpp
+  ld_library_path : $ROOT/lib-stdcxx
 EOT

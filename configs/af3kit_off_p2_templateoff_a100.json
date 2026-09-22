@@ -17,7 +17,8 @@
     "env": {
       "LIBCIFPP_DATA_DIR": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/shi/anthropic_optimization/venv/af3-jax/share/libcifpp"
     },
-    "mode": "off"
+    "mode": "off",
+    "ld_library_path": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/shi/anthropic_optimization/lib-stdcxx"
   },
   "model_dir": "/cluster/project/beltrao/jbuhmann/agentic_ai/workspaces/shi/anthropic_optimization/weights/af3_jax/p2",
   "of3_weights": true,
@@ -55,6 +56,7 @@
     "Card: A100 80GB (cc 8.0), which the kit ships a card file for. The kit's headline numbers are H100;",
     "on A100 its README says big leaves the fused triangle attention and fused transition off.",
     "The clone carries profiling/patches/af3_jax_openbind.diff (openbind layout support, gated on",
+    "launcher.ld_library_path: a GCC 13 libstdc++ for the venv. AlphaFold3's compiled extension needs GLIBCXX_3.4.32 and Euler's GPU nodes are not uniform -- the first submission of these arms failed on eu-ts-01 and ran on eu-a65-05. The image-based arms are immune.",
     "of3_openbind); inert for this arm's preview-2 weights."
   ]
 }
