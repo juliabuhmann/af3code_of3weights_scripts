@@ -1,0 +1,33 @@
+{
+  "experiment": "benchmark",
+  "set": "vs_paper",
+  "title": "Harness check: our AlphaFold 3 run vs Zheng & Peng's own predictions",
+  "arms": [
+    "af3_native",
+    "zheng_af3_local"
+  ],
+  "baseline": "af3_native",
+  "missing_arms": [],
+  "sources": {
+    "af3_native": {
+      "dockq_table": "$AF3OF3_BASE_DIR/results/dockq/af3_native.tsv",
+      "dockq_rows": 203,
+      "profile_table": "$AF3OF3_BASE_DIR/results/profiling/af3_native.tsv",
+      "profile_rows": 203
+    },
+    "zheng_af3_local": {
+      "dockq_table": "$AF3OF3_BASE_DIR/results/dockq/zheng_af3_local.tsv",
+      "dockq_rows": 206,
+      "profile_table": "$AF3OF3_BASE_DIR/results/profiling/zheng_af3_local.tsv",
+      "profile_rows": 0
+    }
+  },
+  "figures": [
+    "dockq_distribution.png",
+    "dockq_scatter.png",
+    "runtime_vs_size.png"
+  ],
+  "script": "scripts/06_plot_comparison.py",
+  "git_commit": "5178a77+dirty",
+  "runtime_column": "model_s"
+}

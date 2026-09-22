@@ -1,0 +1,24 @@
+{
+  "experiment": "scaling",
+  "set": null,
+  "title": "OF3 code / kit big, reach gate off / openbind weights",
+  "arms": [
+    "of3kit_big_reachoff_templateoff"
+  ],
+  "baseline": null,
+  "missing_arms": [],
+  "sources": {
+    "of3kit_big_reachoff_templateoff": {
+      "table": "$AF3OF3_BASE_DIR/profiling/of3kit_big_reachoff_templateoff/vram_sweep.tsv",
+      "rows": 13,
+      "ok_rows": 12
+    }
+  },
+  "figures": [
+    "runtime_vs_tokens.png",
+    "vram_vs_tokens.png"
+  ],
+  "script": "profiling/plot_vram.py",
+  "git_commit": "5178a77+dirty",
+  "metric": "peak_alloc_gib"
+}

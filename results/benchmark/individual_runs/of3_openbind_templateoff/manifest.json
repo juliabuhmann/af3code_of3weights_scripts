@@ -1,0 +1,25 @@
+{
+  "experiment": "benchmark",
+  "set": null,
+  "title": "OF3 code / openbind weights",
+  "arms": [
+    "of3_openbind_templateoff"
+  ],
+  "baseline": null,
+  "missing_arms": [],
+  "sources": {
+    "of3_openbind_templateoff": {
+      "dockq_table": "$AF3OF3_BASE_DIR/results/dockq/of3_openbind_templateoff.tsv",
+      "dockq_rows": 203,
+      "profile_table": "$AF3OF3_BASE_DIR/results/profiling/of3_openbind_templateoff.tsv",
+      "profile_rows": 203
+    }
+  },
+  "figures": [
+    "dockq_distribution.png",
+    "runtime_vs_size.png"
+  ],
+  "script": "scripts/06_plot_comparison.py",
+  "git_commit": "5178a77+dirty",
+  "runtime_column": "model_s"
+}

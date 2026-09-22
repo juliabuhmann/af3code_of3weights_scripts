@@ -1,0 +1,35 @@
+{
+  "experiment": "scaling",
+  "set": "af3kit_a100",
+  "title": "Anthropic af3_jax kit modes vs stock, preview-2 weights, A100 80GB",
+  "arms": [
+    "af3_openbind_templateoff_a100",
+    "af3kit_off_p2_templateoff_a100"
+  ],
+  "baseline": "af3_openbind_templateoff_a100",
+  "missing_arms": [
+    "af3kit_exact_p2_templateoff_a100",
+    "af3kit_fast_p2_templateoff_a100",
+    "af3kit_big_p2_templateoff_a100"
+  ],
+  "sources": {
+    "af3_openbind_templateoff_a100": {
+      "table": "$AF3OF3_BASE_DIR/profiling/af3_openbind_templateoff_a100/vram_sweep.tsv",
+      "rows": 11,
+      "ok_rows": 10
+    },
+    "af3kit_off_p2_templateoff_a100": {
+      "table": "$AF3OF3_BASE_DIR/profiling/af3kit_off_p2_templateoff_a100/vram_sweep.tsv",
+      "rows": 4,
+      "ok_rows": 4
+    }
+  },
+  "figures": [
+    "ratio_vs_tokens.png",
+    "runtime_vs_tokens.png",
+    "vram_vs_tokens.png"
+  ],
+  "script": "profiling/plot_vram.py",
+  "git_commit": "5178a77+dirty",
+  "metric": "peak_alloc_gib"
+}

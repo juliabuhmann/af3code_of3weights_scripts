@@ -1,0 +1,2 @@
+run	label	is_baseline	n_common_dockq	dockq_median	dockq_mean	n_scored	frac_acceptable	frac_medium	frac_high	n_common_runtime	model_s_median	model_s_total
+of3_openbind_templateoff	OF3 code / openbind weights	false	203	0.6950	0.5392	203	0.7143	0.6010	0.3596	203	31.9	16890

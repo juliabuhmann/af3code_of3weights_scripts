@@ -1,0 +1,34 @@
+{
+  "experiment": "benchmark",
+  "set": "weights",
+  "title": "AlphaFold 3 code, templates on: AlphaFold 3 weights vs openbind weights",
+  "arms": [
+    "af3_native",
+    "af3_openbind"
+  ],
+  "baseline": "af3_native",
+  "missing_arms": [],
+  "sources": {
+    "af3_native": {
+      "dockq_table": "$AF3OF3_BASE_DIR/results/dockq/af3_native.tsv",
+      "dockq_rows": 203,
+      "profile_table": "$AF3OF3_BASE_DIR/results/profiling/af3_native.tsv",
+      "profile_rows": 203
+    },
+    "af3_openbind": {
+      "dockq_table": "$AF3OF3_BASE_DIR/results/dockq/af3_openbind.tsv",
+      "dockq_rows": 203,
+      "profile_table": "$AF3OF3_BASE_DIR/results/profiling/af3_openbind.tsv",
+      "profile_rows": 203
+    }
+  },
+  "figures": [
+    "dockq_distribution.png",
+    "dockq_scatter.png",
+    "runtime_paired.png",
+    "runtime_vs_size.png"
+  ],
+  "script": "scripts/06_plot_comparison.py",
+  "git_commit": "5178a77+dirty",
+  "runtime_column": "model_s"
+}

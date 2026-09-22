@@ -1,0 +1,24 @@
+arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver
+af3_openbind_templateoff	af3	openbind	false	500	2	ok	2613.1	2.55	92388.0	93009	90.83	97887	73	55.9	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	1000	4	ok	5461.1	5.33	92388.0	93009	90.83	97887	98	80.8	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	1500	6	ok	9510.0	9.29	92388.0	93011	90.83	97887	133	115.3	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	2000	8	ok	15035.6	14.68	92388.0	93011	90.83	97887	179	160.7	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	2500	10	ok	18665.7	18.23	92388.0	93013	90.83	97887	240	221.6	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	3000	12	ok	26372.3	25.75	92388.0	93013	90.83	97887	317	298.9	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	3500	14	ok	35297.2	34.47	92388.0	93011	90.83	97887	415	396.7	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	4000	16	ok	45601.7	44.53	92388.0	93013	90.83	97887	527	508.0	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	4500	18	ok	57269.0	55.93	92388.0	93015	90.83	97887	681	660.5	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	5000	20	ok	70304.6	68.66	92388.0	93015	90.83	97887	855	834.8	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	5500	22	ok	80866.7	78.97	92388.0	93015	90.83	97887	1023	1001.4	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	6000	24	gpu_oom	89694.0	87.59	92388.0	92995	90.82	97887	138		1	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	500	2	ok	2580.1	2.52	77096.0	77571	75.75	81920	63	42.4	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	1000	4	ok	5303.0	5.18	77096.0	77571	75.75	81920	97	76.2	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	1500	6	ok	9510.0	9.29	77096.0	77571	75.75	81920	155	132.4	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	2000	8	ok	15528.5	15.16	77096.0	77571	75.75	81920	248	224.9	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	2500	10	ok	18752.9	18.31	77096.0	77573	75.75	81920	324	301.4	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	3000	12	ok	26372.3	25.75	77096.0	77575	75.76	81920	456	433.0	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	3500	14	ok	35326.6	34.50	77096.0	77575	75.76	81920	629	602.8	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	4000	16	ok	45675.3	44.60	77096.0	77577	75.76	81920	833	807.3	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	4500	18	ok	57396.7	56.05	77096.0	77577	75.76	81920	1091	1063.2	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	5000	20	ok	70496.5	68.84	77096.0	77577	75.76	81920	1406	1378.1	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	5500	22	gpu_oom	4131.6	4.03	77096.0	77535	75.72	81920	110		1	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04

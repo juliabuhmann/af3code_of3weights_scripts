@@ -1,0 +1,2 @@
+run	label	is_baseline	n_common_dockq	dockq_median	dockq_mean	n_scored	frac_acceptable	frac_medium	frac_high	n_common_runtime	model_s_median	model_s_total
+af3_openbind_templateoff	AF3 code / openbind weights (templates off)	false	203	0.6710	0.5254	203	0.6946	0.5813	0.3350	203	69.4	19097

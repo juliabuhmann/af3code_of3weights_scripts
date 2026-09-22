@@ -1,0 +1,31 @@
+{
+  "experiment": "scaling",
+  "set": "codebases",
+  "title": "AlphaFold 3 vs OpenFold3 codebase, openbind weights, RTX PRO 6000",
+  "arms": [
+    "af3_openbind_templateoff",
+    "of3_openbind_templateoff"
+  ],
+  "baseline": "af3_openbind_templateoff",
+  "missing_arms": [],
+  "sources": {
+    "af3_openbind_templateoff": {
+      "table": "$AF3OF3_BASE_DIR/profiling/af3_openbind_templateoff/vram_sweep.tsv",
+      "rows": 12,
+      "ok_rows": 11
+    },
+    "of3_openbind_templateoff": {
+      "table": "$AF3OF3_BASE_DIR/profiling/of3_openbind_templateoff/vram_sweep.tsv",
+      "rows": 8,
+      "ok_rows": 7
+    }
+  },
+  "figures": [
+    "ratio_vs_tokens.png",
+    "runtime_vs_tokens.png",
+    "vram_vs_tokens.png"
+  ],
+  "script": "profiling/plot_vram.py",
+  "git_commit": "5178a77+dirty",
+  "metric": "peak_alloc_gib"
+}
