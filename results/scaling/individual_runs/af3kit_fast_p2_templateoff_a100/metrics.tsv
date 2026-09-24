@@ -1,0 +1,11 @@
+arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver
+af3kit_fast_p2_templateoff_a100	af3	p2	false	500	2	ok	2549.8	2.49		77567	75.75	81920	56	34.8	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_fast_p2_templateoff_a100	af3	p2	false	1000	4	ok	5079.0	4.96		77567	75.75	81920	74	50.8	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_fast_p2_templateoff_a100	af3	p2	false	1500	6	ok	9451.5	9.23		77567	75.75	81920	101	76.8	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_fast_p2_templateoff_a100	af3	p2	false	2000	8	ok	15564.8	15.20		77567	75.75	81920	144	119.2	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_fast_p2_templateoff_a100	af3	p2	false	2500	10	ok	23644.2	23.09		77573	75.75	81920	221	191.6	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_fast_p2_templateoff_a100	af3	p2	false	3000	12	ok	31846.4	31.10		77573	75.75	81920	304	275.5	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_fast_p2_templateoff_a100	af3	p2	false	3500	14	ok	43028.5	42.02		77573	75.75	81920	433	395.1	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_fast_p2_templateoff_a100	af3	p2	false	4000	16	ok	55920.6	54.61		77575	75.76	81920	582	543.5	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_fast_p2_templateoff_a100	af3	p2	false	4500	18	ok	70553.6	68.90		77575	75.76	81920	775	729.4	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_fast_p2_templateoff_a100	af3	p2	false	5000	20	gpu_oom	3727.4	3.64		77535	75.72	81920	107		1	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04

@@ -1,0 +1,29 @@
+{
+  "experiment": "scaling",
+  "set": null,
+  "title": "AF3 kit big / p2",
+  "arms": [
+    "af3kit_big_p2_templateoff_a100"
+  ],
+  "baseline": null,
+  "missing_arms": [],
+  "sources": {
+    "af3kit_big_p2_templateoff_a100": {
+      "table": "$AF3OF3_BASE_DIR/profiling/af3kit_big_p2_templateoff_a100/vram_sweep.tsv",
+      "rows": 11,
+      "ok_rows": 11
+    }
+  },
+  "figures": [
+    "runtime_vs_tokens.png",
+    "vram_vs_tokens.png"
+  ],
+  "script": "profiling/plot_vram.py",
+  "git_commit": "8d5df1d+dirty",
+  "metric": "peak_alloc_gib",
+  "speedup_at_tokens": null,
+  "model_sources": {
+    "af3kit_big_p2_templateoff_a100": "(not recorded)"
+  },
+  "model_time_definitions_mixed": false
+}
