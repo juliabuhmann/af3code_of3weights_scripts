@@ -29,16 +29,17 @@
   "figures": [
     "ratio_vs_tokens.png",
     "runtime_vs_tokens.png",
-    "vram_vs_tokens.png"
+    "vram_vs_tokens.png",
+    "wall_vs_tokens.png"
   ],
   "script": "profiling/plot_vram.py",
-  "git_commit": "665e553+dirty",
+  "git_commit": "b22c7f5+dirty",
   "metric": "peak_alloc_gib",
   "speedup_at_tokens": 5000,
   "model_sources": {
     "af3_openbind_templateoff": "(not recorded)",
-    "of3kit_off_templateoff": "(not recorded)",
-    "of3kit_big_reachoff_templateoff": "(not recorded)"
+    "of3kit_off_templateoff": "of3 predict timeline (featurise+compute)",
+    "of3kit_big_reachoff_templateoff": "of3 predict timeline (featurise+compute)"
   },
-  "model_time_definitions_mixed": true
+  "model_time_definitions_mixed": false
 }

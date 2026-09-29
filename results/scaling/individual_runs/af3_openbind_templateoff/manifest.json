@@ -16,10 +16,11 @@
   },
   "figures": [
     "runtime_vs_tokens.png",
-    "vram_vs_tokens.png"
+    "vram_vs_tokens.png",
+    "wall_vs_tokens.png"
   ],
   "script": "profiling/plot_vram.py",
-  "git_commit": "665e553+dirty",
+  "git_commit": "b22c7f5+dirty",
   "metric": "peak_alloc_gib",
   "speedup_at_tokens": null,
   "model_sources": {

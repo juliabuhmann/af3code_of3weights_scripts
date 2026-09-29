@@ -1,7 +1,7 @@
 {
   "experiment": "scaling",
   "set": null,
-  "title": "AF3 code / openbind weights",
+  "title": "AF3 code [af3_openbind_templateoff_a100]",
   "arms": [
     "af3_openbind_templateoff_a100"
   ],
@@ -16,10 +16,11 @@
   },
   "figures": [
     "runtime_vs_tokens.png",
-    "vram_vs_tokens.png"
+    "vram_vs_tokens.png",
+    "wall_vs_tokens.png"
   ],
   "script": "profiling/plot_vram.py",
-  "git_commit": "8d5df1d+dirty",
+  "git_commit": "b22c7f5+dirty",
   "metric": "peak_alloc_gib",
   "speedup_at_tokens": null,
   "model_sources": {

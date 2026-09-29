@@ -9,8 +9,10 @@ or an ad-hoc list of arms:
     results/scaling/sweep/<set>/
         vram_vs_tokens.png       peak live memory per arm, with the card's memory and
                                  AlphaFold 3's arena as reference lines
-        runtime_vs_tokens.png    model time per arm (the engine's own timer, as in
-                                 scripts/04_collect_profiling.py)
+        runtime_vs_tokens.png    model time per arm: featurisation + inference
+        wall_vs_tokens.png       the launcher process start to exit for one query, which
+                                 adds interpreter or container start, weight loading and
+                                 writing the structures out
         ratio_vs_tokens.png      every arm relative to the set's baseline at the token
                                  counts both ran: speed-up (>1 faster) and memory
                                  fraction (<1 less); only with a baseline
@@ -18,7 +20,8 @@ or an ad-hoc list of arms:
         manifest.json            arms in legend order, baseline, source tables, commit
 
     results/scaling/individual_runs/<arm>/
-        vram_vs_tokens.png, runtime_vs_tokens.png, metrics.tsv, manifest.json
+        vram_vs_tokens.png, runtime_vs_tokens.png, wall_vs_tokens.png, metrics.tsv,
+        manifest.json
                                  the same, for each arm on its own
 
 All figures of a directory are written on every invocation, so a directory can never
@@ -217,7 +220,8 @@ def plot_vram(arms: list[Arm], metric: str, out: Path, title: str | None) -> Pat
     return fl.save(fig, out / "vram_vs_tokens.png")
 
 
-def annotate_speedup(ax, arms: list[Arm], baseline: Arm | None, at_tokens: int | None) -> None:
+def annotate_speedup(ax, arms: list[Arm], baseline: Arm | None, at_tokens: int | None,
+                     key: str = "model_s") -> str | None:
     """Write each arm's speed-up over the baseline beside its own marker at one token count.
 
     A direct label on the point it describes, rather than a number in the legend the reader
@@ -225,29 +229,43 @@ def annotate_speedup(ax, arms: list[Arm], baseline: Arm | None, at_tokens: int |
     actually runs -- because a number on every point goes unread. An arm with no row there
     is not labelled rather than interpolated."""
     if not at_tokens or baseline is None:
-        return
-    base = baseline.ok_map("model_s").get(at_tokens)
+        return None
+    base = baseline.ok_map(key).get(at_tokens)
     if base is None:
         print(f"  [WARN] speed-up at {at_tokens} tokens: the baseline {baseline.name} has no "
-              f"model time there; the runtime figure is not annotated")
-        return
+              f"{key} there; that figure is not annotated")
+        return None
     for arm in arms:
         if arm is baseline:
             continue
-        value = arm.ok_map("model_s").get(at_tokens)
+        value = arm.ok_map(key).get(at_tokens)
         if value is None:
             continue
         # A ring in the surface colour lifts the labelled point off its curve.
         ax.plot([at_tokens], [value], marker=fl.MARKER, ms=11, color=arm.style["color"],
                 markeredgecolor="white", markeredgewidth=2.5, zorder=5)
+        # "0.61x faster" is not a sentence anyone reads correctly: an arm slower than the
+        # baseline says so, with the ratio the way round that makes it a number above one.
+        ratio = base / value
+        verdict = (f"{ratio:.2f}x faster than" if ratio >= 1
+                   else f"{1 / ratio:.2f}x slower than")
         # Both times, this arm's first: a ratio alone hides whether it is 5 s against 8 s
         # or 510 s against 835 s, and the second reading is the one that decides anything.
-        ax.annotate(f"{base / value:.2f}x faster than\n{baseline.label}  "
-                    f"({value:.0f} s / {base:.0f} s)",
-                    xy=(at_tokens, value), xytext=(12, -6), textcoords="offset points",
-                    va="top", ha="left", fontsize=11, color=fl.INK_TEXT)
+        # WHAT it is relative to is said once, in the subtitle: spelling the baseline out
+        # beside every marker repeats it and, with a long arm name, runs off the axes.
+        text = f"{verdict}  ({value:.0f} s / {base:.0f} s)"
+        # Past the middle of the x axis the label would run into the legend, so there it
+        # hangs to the left of its marker instead.
+        left, right = ax.get_xlim()
+        to_left = at_tokens > left + 0.55 * (right - left)
+        ax.annotate(text, xy=(at_tokens, value),
+                    xytext=(-12 if to_left else 12, -6), textcoords="offset points",
+                    va="top", ha="right" if to_left else "left",
+                    fontsize=11, color=fl.INK_TEXT)
         print(f"  {arm.name}: {value:.0f} s at {at_tokens:,} tokens, "
-              f"{base / value:.2f}x the baseline's {base:.0f} s")
+              f"{ratio:.2f}x the baseline's {base:.0f} s")
+    return (f"at {at_tokens:,} tokens, against {baseline.label} "
+            f"({base:.0f} s)")
 
 
 # An of3 row whose model time came from OpenFold3's own timer covers its predict loop and
@@ -275,27 +293,44 @@ def mixed_definitions(arms: list[Arm]) -> bool:
                for a in arms)
 
 
-def plot_runtime(arms: list[Arm], out: Path, title: str | None, baseline: Arm | None = None,
-                 at_tokens: int | None = None) -> Path | None:
+# The two time axes, drawn the same way so they can be read side by side.
+#
+#   model_s  featurisation + inference of this query: what the engine costs.
+#   wall_s   the launcher process from start to exit -- the same work PLUS interpreter or
+#            container start, weight loading and writing the structures out. One query per
+#            process, so it is the cost of a single prediction end to end and NOT a
+#            throughput number: nothing overlaps because there is nothing to overlap with.
+TIME_FIGURES = (
+    ("model_s", "runtime_vs_tokens.png", "Model time vs complex size", "Model time (s)"),
+    ("wall_s", "wall_vs_tokens.png", "Wall-clock time vs complex size, one query per run",
+     "Wall time (s)"),
+)
+
+
+def plot_time(arms: list[Arm], out: Path, title: str | None, baseline: Arm | None,
+              at_tokens: int | None, key: str, filename: str, headline: str,
+              ylabel: str) -> Path | None:
     fig, ax = plt.subplots(figsize=(9.0, 5.8))
     # A list, not a generator: any() would short-circuit and leave every arm after the
     # first one undrawn.
-    if not any([draw_line(ax, a, "model_s") for a in arms]):
+    if not any([draw_line(ax, a, key) for a in arms]):
         plt.close(fig)
-        print("  runtime_vs_tokens: no model_s values, skipping")
+        print(f"  {filename}: no {key} values, skipping")
         return None
-    annotate_speedup(ax, arms, baseline, at_tokens)
+    against = annotate_speedup(ax, arms, baseline, at_tokens, key)
     ax.set_xlabel(X_LABEL)
-    ax.set_ylabel("Model time (s)")
-    subtitle = title
-    if mixed_definitions(arms):
-        subtitle = f"{title}\n{MIXED_NOTE}" if title else MIXED_NOTE
+    ax.set_ylabel(ylabel)
+    lines = [line for line in (title, against) if line]
+    # Only the model-time figure can mix definitions: wall_s is one clock for both engines.
+    if key == "model_s" and mixed_definitions(arms):
+        lines.append(MIXED_NOTE)
         print(f"  [WARN] {MIXED_NOTE}")
-    fl.title(ax, "Model time vs complex size", subtitle)
+    subtitle = "\n".join(lines) or None
+    fl.title(ax, headline, subtitle)
     ax.set_ylim(bottom=0)
     if len(arms) > 1:
         fl.outside_legend(ax)
-    return fl.save(fig, out / "runtime_vs_tokens.png")
+    return fl.save(fig, out / filename)
 
 
 def plot_ratio(arms: list[Arm], baseline: Arm, metric: str, out: Path,
@@ -358,8 +393,9 @@ def write_directory(arms: list[Arm], out: Path, *, metric: str, baseline: Arm | 
                     missing: list[str], at_tokens: int | None = None) -> list[tuple]:
     out.mkdir(parents=True, exist_ok=True)
     figures, ratio_table = [], []
-    for path in (plot_vram(arms, metric, out, title),
-                 plot_runtime(arms, out, title, baseline, at_tokens)):
+    paths = [plot_vram(arms, metric, out, title)]
+    paths += [plot_time(arms, out, title, baseline, at_tokens, *spec) for spec in TIME_FIGURES]
+    for path in paths:
         if path:
             figures.append(path)
     if baseline is not None and len(arms) > 1:

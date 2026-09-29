@@ -56,6 +56,24 @@ existed hold OpenFold3's own timer, and a figure drawn from them says so under i
 the speed-ups read off them flatter the OpenFold3 side, and the arms need re-sweeping for
 like-for-like numbers.
 
+## One query per run: what wall time does and does not say
+
+Each size in the grid is one query in its own process, so `wall_s` is a single prediction
+end to end and nothing is pipelined -- the batch has to be built before the model can start
+on it, because there is no other batch to be working on meanwhile.
+
+That is not how the engines behave on a real pool. OpenFold3 features its queries in
+DataLoader workers, so with several queries the featurisation of the next one overlaps the
+inference of the current one, and the kit keeps that: its `loader_workers` lever exists to
+stop the loader forking ten workers for a one-item query set, capping them at the item count
+(`used = max(1, min(items, configured))`, never 0). With one item there is nothing to
+overlap, so this grid measures the worst case for both engines and the startup cost is paid
+once per size rather than amortised.
+
+Measuring the overlap would take a different sweep: n queries of one size in a single
+process, comparing the total against n times the single-query wall time. Nothing here does
+that yet.
+
 ## What is measured
 
 One arm per sweep, taken from the repository's own arm configs, so the sweep runs the
@@ -293,6 +311,7 @@ accumulates and no figure outlives the table beside it:
 | file | what |
 |---|---|
 | `vram_vs_tokens.png` | peak memory vs tokens, absolute |
+| `wall_vs_tokens.png` | the launcher process start to exit for ONE query: the same work plus interpreter or container start, weight loading and writing the structures out. Not a throughput number -- see below |
 | `runtime_vs_tokens.png` | model time (featurisation + inference) vs tokens, absolute. Where a set names a `speedup_at` token count, each arm's marker at that size is labelled with its speed-up over the baseline -- 5,000 tokens for `of3kit_rtxpro6000`, the size the pooled scheme actually runs |
 | `ratio_vs_tokens.png` | every arm **relative to the production engine** on that card: speed-up (baseline time / arm time, >1 faster) and peak memory as a fraction of the baseline's (<1 less), at the token counts both ran. Sweeps with a baseline only |
 | `metrics.tsv` | every plotted row, host columns dropped |
