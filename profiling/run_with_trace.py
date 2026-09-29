@@ -147,30 +147,52 @@ def parse_model_time(engine: str, log_path: str, timing_glob: str) -> float | No
                  + (float(infer.group(1)) if infer else 0.0), 3)
 
 
+def parse_af3_parts(log_path: str) -> tuple[float | None, float | None]:
+    """(featurisation_s, inference_s) from AlphaFold3's own log, either missing as None."""
+    try:
+        with open(log_path, errors="replace") as fh:
+            text = fh.read()
+    except FileNotFoundError:
+        return None, None
+    feat, infer = FEATURISE_RE.search(text), INFERENCE_RE.search(text)
+    return (float(feat.group(1)) if feat else None,
+            float(infer.group(1)) if infer else None)
+
+
 def model_time(engine: str, log_path: str, timing_glob: str, peak_mem: dict,
                status: str) -> dict:
-    """model_time_s and the fields saying how it was arrived at.
+    """The run's time in the three parts both engines are now measured in.
 
-    For of3 the timeline peak_mem.py recorded is preferred, because it is the only
-    measurement that includes featurisation and so the only one comparable with the
-    AlphaFold3 log. OpenFold3's own runtime_s is kept beside it: it should equal
-    compute_s, and a disagreement means the callback missed a batch."""
+        featurisation_s   building this query's features
+        inference_s       the model on those features
+        model_time_s      their sum -- THE CROSS-ENGINE NUMBER
+
+    For af3 the two parts are the timers in its own log. For of3 they are the predict
+    timeline profiling/peak_mem.py recorded, because OpenFold3's own runtime_s covers its
+    predict loop and not the featurisation the DataLoader did before it -- that number is
+    kept as of3_runtime_s, where it should equal inference_s, and a disagreement means the
+    callback missed a batch. `model_source` says which of these a row carries."""
     if status != "ok":
         return {"model_time_s": None, "model_source": None}
-    engine_timer = parse_model_time(engine, log_path, timing_glob)
     if engine != "of3":
-        return {"model_time_s": engine_timer, "model_source": "af3 log (featurise+inference)"}
+        feat, infer = parse_af3_parts(log_path)
+        total = parse_model_time(engine, log_path, timing_glob)
+        return {"model_time_s": total, "model_source": "af3 log (featurise+inference)",
+                "featurisation_s": feat, "inference_s": infer}
+    engine_timer = parse_model_time(engine, log_path, timing_glob)
     feat, compute = peak_mem.get("featurisation_s"), peak_mem.get("compute_s")
     if isinstance(feat, (int, float)) and isinstance(compute, (int, float)):
         return {"model_time_s": round(feat + compute, 3),
-                "model_source": "of3 predict timeline (featurise+compute)",
+                "model_source": "of3 predict timeline (featurise+inference)",
                 "featurisation_s": feat,
-                "compute_s": compute,
+                "inference_s": compute,
                 "featurisation_is_lower_bound": peak_mem.get("featurisation_is_lower_bound"),
+                # OpenFold3's own timer, the same window as inference_s: a cross-check.
                 "of3_runtime_s": engine_timer}
     # No timeline: OpenFold3's own timer, which leaves featurisation out.
     return {"model_time_s": engine_timer,
             "model_source": "of3 timing.json (predict loop only, no featurisation)",
+            "inference_s": engine_timer,
             "of3_timeline_error": peak_mem.get("of3_timeline_error")}
 
 

@@ -84,7 +84,7 @@ MANIFEST="$INPUT_DIR/pool_manifest.tsv"
 
 mkdir -p "$OUT_DIR"
 TABLE="$OUT_DIR/vram_sweep.tsv"
-COLUMNS="arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	featurisation_s	model_source	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver	node	slurm_job_id"
+COLUMNS="arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	featurisation_s	inference_s	model_source	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver	node	slurm_job_id"
 if [[ -f "$TABLE" ]]; then
     # A table written before featurisation_s/model_source existed holds model times that
     # mean something different for of3 (its predict loop, without featurisation). Appending
@@ -429,6 +429,7 @@ row = [arm, engine, weights,
        str(r.get("wall_time_s") or ""),
        "" if r.get("model_time_s") is None else f"{r['model_time_s']:.1f}",
        "" if r.get("featurisation_s") is None else f"{r['featurisation_s']:.1f}",
+       "" if r.get("inference_s") is None else f"{r['inference_s']:.1f}",
        str(r.get("model_source") or ""),
        str(r.get("exit_code", "")), samples, recycles,
        mem_fraction if engine == "af3" else "",

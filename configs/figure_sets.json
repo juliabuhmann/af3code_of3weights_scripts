@@ -55,6 +55,30 @@
     ],
     "baseline": "af3_openbind_templateoff_a100"
   },
+  "production_options": {
+    "experiment": "scaling",
+    "title": "What we could run instead of today's engine: both codebases, both cards",
+    "_note": [
+      "The decision set. af3_openbind_templateoff is the engine in production today, and the",
+      "baseline every speed-up is quoted against. The other three are the alternatives:",
+      "the OpenFold3 kit's `big` on the same RTX PRO 6000, and the A100 pair (stock AlphaFold 3",
+      "against the af3_jax kit's `big`) which say whether the kit is worth it on the older card.",
+      "Weights are NOT held fixed here: the A100 kit arms run the preview-2 weights, the others",
+      "openbind, so the legend spells the weights out and a time difference between an openbind",
+      "arm and a p2 arm is not only the launcher. Read it as what each option costs to run, not",
+      "as a controlled comparison of launchers -- of3kit_rtxpro6000 and af3kit_a100 are those.",
+      "The two af3kit_*_a100 arms have not been swept yet; until they are, this set draws the",
+      "two arms that have data and records the rest under missing_arms in its manifest."
+    ],
+    "arms": [
+      "af3_openbind_templateoff",
+      "of3kit_big_reachoff_templateoff",
+      "af3_openbind_templateoff_a100",
+      "af3kit_big_p2_templateoff_a100"
+    ],
+    "baseline": "af3_openbind_templateoff",
+    "speedup_at": 5000
+  },
   "cards": {
     "experiment": "scaling",
     "title": "AlphaFold 3 code, openbind weights: RTX PRO 6000 vs A100 80GB",

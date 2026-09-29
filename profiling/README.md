@@ -48,7 +48,10 @@ as a cross-check. DataLoader workers would overlap the fetch with the compute an
 `featurisation_s` a lower bound, so `num_workers` is recorded and the profiling runner yamls
 set it to 0.
 
-The `model_source` column says which definition a row carries. Rows swept before this
+Every row therefore carries the same three quantities for both engines -- `featurisation_s`,
+`inference_s` and their sum `model_s` -- beside `wall_s`, which adds interpreter or container
+start, parameter loading and output writing. The `model_source` column says which definition a
+row carries. Rows swept before this
 existed hold OpenFold3's own timer, and a figure drawn from them says so under its title:
 the speed-ups read off them flatter the OpenFold3 side, and the arms need re-sweeping for
 like-for-like numbers.
