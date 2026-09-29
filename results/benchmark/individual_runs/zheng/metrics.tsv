@@ -1,0 +1,2 @@
+run	label	is_baseline	n_common_dockq	dockq_median	dockq_mean	n_scored	frac_acceptable	frac_medium	frac_high
+zheng	zheng	false	206	0.7110	0.5910	206	0.7670	0.6748	0.4320

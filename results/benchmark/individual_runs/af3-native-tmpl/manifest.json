@@ -1,0 +1,27 @@
+{
+  "experiment": "benchmark",
+  "arms": [
+    {
+      "short": "af3-native-tmpl",
+      "config": "af3_native.json",
+      "name_tag": "af3_native",
+      "label": "AF3 code + AF3 native weights"
+    }
+  ],
+  "baseline": null,
+  "sources": {
+    "af3-native-tmpl": {
+      "dockq_table": "$AF3OF3_BASE_DIR/results/dockq/af3_native.tsv",
+      "dockq_rows": 203,
+      "profile_table": "$AF3OF3_BASE_DIR/results/profiling/af3_native.tsv",
+      "profile_rows": 203
+    }
+  },
+  "figures": [
+    "dockq_distribution.png",
+    "runtime_vs_size.png"
+  ],
+  "script": "scripts/06_plot_comparison.py",
+  "git_commit": "12fcd68+dirty",
+  "runtime_column": "model_s"
+}

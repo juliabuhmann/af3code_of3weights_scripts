@@ -138,21 +138,24 @@ the two above, plus the templates-on pair on either weight set (`af3_openbind`,
 Every figure is written by a script into a directory named after the comparison it
 shows, so a figure is never separated from the numbers behind it:
 
-    results/<experiment>/sweep/<set>/            several arms compared
-    results/<experiment>/individual_runs/<arm>/  one arm on its own
+    results/<experiment>/sweep/<short1>_<short2>_.../  several arms compared
+    results/<experiment>/individual_runs/<short>/     one arm on its own
 
 `<experiment>` is `benchmark` (DockQ and model time per complex, Benchmark-IV) or
 `scaling` (peak memory and model time against token count, on the pool ladder).
-`<set>` is an entry in [`configs/figure_sets.json`](configs/figure_sets.json), which
-names the arms, their legend order and the baseline; each directory also holds
-`metrics.tsv` and a `manifest.json` recording the source tables and the commit that
-drew them. Each arm keeps one colour, marker and line style across every figure in the
-repository, from [`configs/arm_style.json`](configs/arm_style.json). To redraw:
+Every arm config carries a `short` -- `af3-ob`, `of3kit-big`, `af3-ob-a100` -- and that is
+the arm's name on the command line, in the legend and in the path, so a figure and its
+location always agree. A comparison is named after the arms it holds, in the order given,
+and the first arm is the baseline. Each directory also holds `metrics.tsv` and a
+`manifest.json` recording which config each short resolved to, the source tables and the
+commit that drew them. Colours come from
+[`configs/arm_style.json`](configs/arm_style.json), keyed by the same short. To redraw:
 
 ```bash
-pixi run plot-benchmark --set engine --dockq $AF3OF3_BASE_DIR/results/dockq \
-                                     --profile $AF3OF3_BASE_DIR/results/profiling
-pixi run plot-scaling   --set of3kit_rtxpro6000
+pixi run plot-benchmark --arms af3-ob of3-ob --dockq $AF3OF3_BASE_DIR/results/dockq \
+                                             --profile $AF3OF3_BASE_DIR/results/profiling
+pixi run plot-scaling   --arms af3-ob of3kit-big --speedup-at 5000
+pixi run plot-scaling   --arms          # list the arms and what each one is
 ```
 
 ### How do AlphaFold 3's own weights compare to openbind?

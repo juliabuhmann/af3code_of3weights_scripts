@@ -1,6 +1,7 @@
 {
   "name_tag": "af3_native",
   "label": "AF3 code + AF3 native weights",
+  "short": "af3-native-tmpl",
   "tag": "AF3 code / AF3 weights",
 
   "engine": "af3",

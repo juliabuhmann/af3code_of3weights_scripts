@@ -1,0 +1,18 @@
+{
+  "name_tag": "zheng_af3_local",
+  "short": "zheng",
+  "label": "Zheng & Peng's own AlphaFold 3 predictions, from the paper's release",
+  "external": true,
+
+  "notes": [
+    "NOT an arm this repository runs: scripts/07_link_paper_predictions.py symlinks the",
+    "paper's own predictions into predictions/zheng_af3_local/ so they can be scored by the",
+    "same DockQ stage, as a check on the harness rather than on a model.",
+    "It exists as a config only so the arm has a `short` like every other, and so figures",
+    "and manifests can name it the same way. `external: true` says there is nothing to",
+    "launch: it has no engine, no weights and no launcher, and run_workflow.sh never sees",
+    "it unless it is passed with --config, which would fail for exactly that reason.",
+    "Its template state and weights are whatever the paper used, which is why no figure",
+    "claims either for it."
+  ]
+}

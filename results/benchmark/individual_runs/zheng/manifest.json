@@ -1,0 +1,26 @@
+{
+  "experiment": "benchmark",
+  "arms": [
+    {
+      "short": "zheng",
+      "config": "zheng_af3_local.json",
+      "name_tag": "zheng_af3_local",
+      "label": "Zheng & Peng's own AlphaFold 3 predictions, from the paper's release"
+    }
+  ],
+  "baseline": null,
+  "sources": {
+    "zheng": {
+      "dockq_table": "$AF3OF3_BASE_DIR/results/dockq/zheng_af3_local.tsv",
+      "dockq_rows": 206,
+      "profile_table": "$AF3OF3_BASE_DIR/results/profiling/zheng_af3_local.tsv",
+      "profile_rows": 0
+    }
+  },
+  "figures": [
+    "dockq_distribution.png"
+  ],
+  "script": "scripts/06_plot_comparison.py",
+  "git_commit": "12fcd68+dirty",
+  "runtime_column": "model_s"
+}

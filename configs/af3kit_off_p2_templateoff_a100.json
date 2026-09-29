@@ -1,6 +1,7 @@
 {
   "name_tag": "af3kit_off_p2_templateoff_a100",
   "label": "AF3 code + Anthropic kit `off` + OpenFold3 preview-2 weights, no templates, A100",
+  "short": "af3kit-off-a100",
   "tag": "AF3 kit off / p2",
   "engine": "af3",
   "weights": "p2",

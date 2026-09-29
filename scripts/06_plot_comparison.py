@@ -1,46 +1,43 @@
 #!/usr/bin/env python3
 """
-Stage 06 -- accuracy and cost on Benchmark-IV, for a registered set of arms.
+Stage 06 -- accuracy and cost on Benchmark-IV, for a comparison of arms.
 
-Reads the per-arm tables stages 04 and 05 wrote and writes, for a set from
-configs/figure_sets.json (or an ad-hoc list of arms):
+Arms are named by their config's `short` (af3-native-tmpl, af3-ob, of3-ob, zheng), and a
+comparison is written to a directory named after the arms it holds. The FIRST arm listed is
+the baseline the paired figures are computed against. Run with no arms to list them.
 
-    results/benchmark/sweep/<set>/
+    results/benchmark/sweep/<short1>_<short2>_.../
         dockq_distribution.png   ECDF per arm over the common set, plus the paired
-                                 difference against the baseline
+                                 difference against the baseline (two arms)
+        dockq_scatter.png        per-entry DockQ, baseline (x) vs the other arm (y),
+                                 coloured by category. Two arms only: colour carries the
+                                 category there, which is why it is a pairwise figure
         runtime_vs_size.png      model time against complex size, one series per arm --
                                  cost as a function of input size, which a median hides
-        dockq_scatter.png        per-entry DockQ, baseline (x) vs the other arm (y),
-                                 coloured by category. Two arms only: the headline of a
-                                 pairwise comparison, meaningless for three
-        runtime_paired.png       model time, baseline vs the other arm, per complex.
-                                 Two arms only
+        runtime_paired.png       model time, baseline vs the other arm. Two arms only
         metrics.tsv              per-arm summary over the common set
         complexes_evaluated.tsv  the entries every arm scored, with each arm's values
-        manifest.json            arms in legend order, baseline, source tables, commit
+        manifest.json            the arms, the baseline, the source tables, the commit
 
-    results/benchmark/individual_runs/<arm>/
+    results/benchmark/individual_runs/<short>/
         dockq_distribution.png, runtime_vs_size.png, metrics.tsv, manifest.json
 
 Every aggregate is computed over the COMMON SET -- entries present in every arm -- so a
 difference in how many entries each arm completed cannot masquerade as a difference in
 quality. The n is reported on every figure or on stdout beside it.
 
-LABELS AND COLOURS. Each arm carries a short `tag` naming its pipeline ("AF3 code /
-openbind weights"), set in its config and copied into every result row (see
-scripts/arm_metadata.py); figures use that rather than the directory name. The template
-state is appended only when the arms plotted disagree on it -- comparing templates-on
-against templates-off it is the whole point of the figure, comparing two templates-off
-arms it is shared context that belongs in the caption. Colours come from
-configs/arm_style.json: one fixed hue per arm across every figure in the repository.
+The result tables key a row by `run`, which is the arm's directory name; it is relabelled to
+the short once, on load, so legends, columns and paths all use the one name a person sees.
 
 Runtime figures default to `model_s` (featurisation + inference), the column comparable
-ACROSS engines; --runtime-column inference_s restricts them to AlphaFold 3's inference
-timer, which OpenFold3 rows do not have.
+ACROSS engines; --runtime-column inference_s restricts them to the inference half.
+
+Legends sit OUTSIDE the axes so no data point is hidden behind them, and every figure is
+saved with bbox_inches="tight" so a long title or an outside legend cannot be cropped.
 
 Usage:
-    pixi run plot-benchmark --set engine
-    pixi run plot-benchmark --arms af3_native af3_openbind --baseline af3_native
+    pixi run plot-benchmark --arms af3-ob of3-ob \
+        --dockq $AF3OF3_BASE_DIR/results/dockq --profile $AF3OF3_BASE_DIR/results/profiling
 """
 
 from __future__ import annotations
@@ -60,9 +57,8 @@ import numpy as np
 
 EXPERIMENT = "benchmark"
 SCRIPT = "scripts/06_plot_comparison.py"
-TEMPLATE_STATE = {"true": "templates on", "false": "templates off", "": "templates ?"}
-# The four DockQ categories: a second, independent identity channel inside one figure,
-# so they take their own slots from the same validated palette.
+# The four DockQ categories: a second, independent identity channel inside one figure, so
+# they take their own slots from the same validated palette.
 CATEGORY_COLOURS = {
     "homodimer": "#2a78d6",
     "heterodimer": "#eb6834",
@@ -90,30 +86,6 @@ def by_entry(rows: list[dict], arm: str, column: str) -> dict[str, float]:
     return out
 
 
-def field(rows: list[dict], arm: str, column: str, default: str = "") -> str:
-    """One arm's value for `column`, or a "/"-joined string when the arm disagrees with
-    itself. Read off the rows rather than passed in, so a label cannot disagree with the
-    data being plotted."""
-    values = {r.get(column, "") for r in rows if r.get("run") == arm}
-    values.discard("")
-    if len(values) == 1:
-        return values.pop()
-    if len(values) > 1:
-        return "/".join(sorted(values))
-    return default
-
-
-def arm_labels(rows: list[dict], arms: list[str]) -> dict[str, str]:
-    """Legend labels spelling out only what DIFFERS; never two series with one label."""
-    labels = {a: field(rows, a, "tag", default=a) or a for a in arms}
-    labels = fl.drop_shared_term(labels, {a: field(rows, a, "weights") for a in arms})
-    states = {a: field(rows, a, "use_templates") for a in arms}
-    if len(set(states.values())) > 1:
-        labels = {a: f"{labels[a]} ({TEMPLATE_STATE.get(states[a], 'templates ?')})" for a in arms}
-    for arm in arms:
-        if list(labels.values()).count(labels[arm]) > 1:
-            labels[arm] = f"{labels[arm]} [{arm}]"
-    return labels
 
 
 def common_entries(rows: list[dict], arms: list[str], column: str) -> tuple[list[str], dict]:
@@ -131,7 +103,7 @@ def annotate(ax, text: str) -> None:
 
 # --------------------------------------------------------------------------- figures
 
-def plot_dockq_distribution(rows, arms, labels, styles, baseline, out, title) -> Path | None:
+def plot_dockq_distribution(rows, arms, labels, styles, baseline, out, subtitle) -> Path | None:
     common, values = common_entries(rows, arms, "dockq")
     if not common:
         print("  dockq_distribution: no entries scored in every arm, skipping")
@@ -151,7 +123,8 @@ def plot_dockq_distribution(rows, arms, labels, styles, baseline, out, title) ->
                  va="bottom")
     ax1.set_xlabel("DockQ")
     ax1.set_ylabel("cumulative fraction of complexes")
-    ax1.set_title(f"DockQ distribution (common set, n={len(common)})")
+    fl.title(ax1, f"DockQ distribution (common set, n={len(common)})",
+             None if paired else subtitle)
     if len(arms) > 1:
         ax1.legend(loc="upper left")
 
@@ -165,15 +138,15 @@ def plot_dockq_distribution(rows, arms, labels, styles, baseline, out, title) ->
         ax2.set_ylabel("complexes")
         ax2.set_title("Paired difference")
         annotate(ax2, f"median {np.median(deltas):+.3f}\nmean {deltas.mean():+.3f}\nn={len(deltas)}")
-    if title:
+    if paired and subtitle:
         # Above the panel titles, not across them: y > 1 works because every figure is
         # saved with bbox_inches="tight".
-        fig.suptitle(title, fontsize=14, fontweight="bold", color="#22221f",
-                     x=0.0, y=1.06, ha="left", va="bottom")
+        fig.suptitle(subtitle, fontsize=11.5, color=fl.INK_TEXT,
+                     x=0.0, y=1.04, ha="left", va="bottom")
     return fl.save(fig, out / "dockq_distribution.png", f"(n={len(common)})")
 
 
-def plot_runtime_vs_size(rows, arms, labels, styles, column, out, title) -> Path | None:
+def plot_runtime_vs_size(rows, arms, labels, styles, column, out, subtitle) -> Path | None:
     size = {r["entry_id"]: v for r in rows if (v := as_float(r.get("total_len", ""))) is not None}
     fig, ax = plt.subplots(figsize=(9.0, 5.6))
     plotted = False
@@ -193,7 +166,7 @@ def plot_runtime_vs_size(rows, arms, labels, styles, column, out, title) -> Path
         return None
     ax.set_xlabel("complex size (summed chain length, residues)")
     ax.set_ylabel(f"{column} (s)")
-    ax.set_title(title or f"Model time ({column}) vs complex size")
+    fl.title(ax, f"Model time ({column}) vs complex size", subtitle)
     if len(arms) > 1:
         fl.outside_legend(ax)
     return fl.save(fig, out / "runtime_vs_size.png")
@@ -306,16 +279,21 @@ def evaluated_rows(dockq_rows, profile_rows, arms, column) -> list[dict]:
     return rows
 
 
-def write_directory(dockq_rows, profile_rows, arms, labels, styles, baseline, *, out, column,
-                    set_name, title, sources, missing) -> None:
+def write_directory(dockq_rows, profile_rows, configs, styles, baseline, *, out,
+                    column, subtitle, sources) -> None:
+    """One directory: its figures, its tables and the manifest saying what it was made from."""
+    arms = [c.short for c in configs]
+    labels = {a: a for a in arms}
     out.mkdir(parents=True, exist_ok=True)
     figures = []
     if dockq_rows:
-        figures.append(plot_dockq_distribution(dockq_rows, arms, labels, styles, baseline, out, title))
+        figures.append(plot_dockq_distribution(dockq_rows, arms, labels, styles, baseline,
+                                               out, subtitle))
         if baseline and len(arms) == 2:
             figures.append(plot_dockq_scatter(dockq_rows, arms, labels, baseline, out))
     if profile_rows:
-        figures.append(plot_runtime_vs_size(profile_rows, arms, labels, styles, column, out, title))
+        figures.append(plot_runtime_vs_size(profile_rows, arms, labels, styles, column, out,
+                                            subtitle))
         if baseline and len(arms) == 2:
             figures.append(plot_runtime_paired(profile_rows, arms, labels, styles, baseline,
                                                column, out))
@@ -324,79 +302,82 @@ def write_directory(dockq_rows, profile_rows, arms, labels, styles, baseline, *,
     if len(arms) > 1 and dockq_rows:
         fl.write_table(out / "complexes_evaluated.tsv",
                        evaluated_rows(dockq_rows, profile_rows, arms, column))
-    fl.write_manifest(out, experiment=EXPERIMENT, script=SCRIPT, set_name=set_name, title=title,
-                      arms=arms, baseline=baseline, sources=sources,
-                      figures=[f for f in figures if f], missing=missing,
+    fl.write_manifest(out, experiment=EXPERIMENT, script=SCRIPT, arms=configs,
+                      baseline=baseline, sources=sources,
+                      figures=[f for f in figures if f],
                       extra={"runtime_column": column})
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--set", dest="set_name", default=None,
-                    help="A benchmark set from configs/figure_sets.json: its arms, baseline and "
-                         "title; written to results/benchmark/sweep/<set>/")
-    ap.add_argument("--arms", nargs="*", default=None,
-                    help="Arms to compare instead, in legend order")
-    ap.add_argument("--baseline", default=None,
-                    help="Arm the paired figures compare against (default: the set's `baseline`)")
-    ap.add_argument("--sets-file", type=Path, default=fl.SETS_FILE)
+    ap.add_argument("--arms", nargs="*", default=None, metavar="SHORT",
+                    help="Arms to compare, by their config's `short`, in legend order. "
+                         "The first is the baseline.")
     ap.add_argument("--dockq", type=Path,
-                    help="scripts/05 output: the per-arm directory (<base>/results/dockq) "
-                         "or a single combined .tsv")
+                    help="scripts/05 output: the per-arm directory "
+                         "(<base>/results/dockq) or a single combined .tsv")
     ap.add_argument("--profile", type=Path,
-                    help="scripts/04 output: the per-arm directory (<base>/results/profiling) "
-                         "or a single combined .tsv")
+                    help="scripts/04 output: the per-arm directory "
+                         "(<base>/results/profiling) or a single combined .tsv")
     ap.add_argument("--runtime-column", default="model_s",
                     choices=["model_s", "inference_s", "wall_s"],
                     help="Which timing column the runtime figures use. model_s (default) is "
                          "featurisation+inference and is the only one comparable across engines.")
     ap.add_argument("--results-root", type=Path, default=fl.RESULTS_ROOT)
+    ap.add_argument("--subtitle", default=None,
+                    help="A line under each figure's title saying what the comparison is for")
     ap.add_argument("--no-individual", action="store_true",
-                    help="Write only the sweep directory, not one directory per arm")
+                    help="Write only the comparison directory, not one per arm")
     args = ap.parse_args()
 
     if not args.dockq and not args.profile:
         sys.exit("ERROR: nothing to plot: pass --dockq and/or --profile")
-    set_name, arms, baseline, title = fl.resolve_selection(args, EXPERIMENT)
-    styles = fl.styles_for(arms)
+    configs = fl.resolve_arms(args.arms or [])
+    styles = fl.styles_for([c.short for c in configs])
     fl.apply_style()
 
-    sources: dict[str, dict] = {}
-    dockq_rows = [r for r in read_rows(args.dockq) if r.get("status") == "ok"] if args.dockq else []
-    profile_rows = read_rows(args.profile) if args.profile else []
+    # The result tables key a row by `run`, which is the arm's name_tag. Relabel to the
+    # short here, once, so everything downstream -- legends, columns, paths -- uses the one
+    # name a person sees.
+    to_short = {c.name: c.short for c in configs}
+
+    def load(path):
+        rows = read_rows(path) if path else []
+        for row in rows:
+            row["run"] = to_short.get(row.get("run", ""), row.get("run", ""))
+        return rows
+
+    dockq_rows = [r for r in load(args.dockq) if r.get("status") == "ok"]
+    profile_rows = load(args.profile)
     present = {r.get("run") for r in dockq_rows} | {r.get("run") for r in profile_rows}
-    missing = [a for a in arms if a not in present]
+    missing = [c.short for c in configs if c.short not in present]
     if missing:
         print(f"  [WARN] no rows for {', '.join(missing)}; dropped from the figures")
-        arms = [a for a in arms if a not in missing]
-    if not arms:
-        sys.exit("ERROR: none of the set's arms has any rows -- run --stage score / collect-profiling")
-    if baseline in missing:
-        print(f"  [WARN] baseline {baseline} has no rows; no paired figures")
-        baseline = None
-    for arm in arms:
-        sources[arm] = {
-            "dockq_table": fl.relative_source(Path(args.dockq) / f"{arm}.tsv") if args.dockq else None,
-            "dockq_rows": sum(1 for r in dockq_rows if r.get("run") == arm),
-            "profile_table": fl.relative_source(Path(args.profile) / f"{arm}.tsv") if args.profile else None,
-            "profile_rows": sum(1 for r in profile_rows if r.get("run") == arm),
-        }
-    labels = arm_labels(dockq_rows or profile_rows, arms)
-    print("labels: " + " | ".join(labels[a] for a in arms))
+        configs = [c for c in configs if c.short not in missing]
+    if not configs:
+        sys.exit("ERROR: none of those arms has any rows -- run --stage score / collect-profiling")
+    baseline = configs[0].short if len(configs) > 1 else None
 
-    out = fl.sweep_dir(EXPERIMENT, set_name, arms, args.results_root)
-    print(f"sweep -> {out}")
-    write_directory(dockq_rows, profile_rows, arms, labels, styles, baseline, out=out,
-                    column=args.runtime_column, set_name=set_name, title=title,
-                    sources=sources, missing=missing)
+    sources = {c.short: {
+        "dockq_table": fl.relative_source(Path(args.dockq) / f"{c.name}.tsv") if args.dockq else None,
+        "dockq_rows": sum(1 for r in dockq_rows if r.get("run") == c.short),
+        "profile_table": fl.relative_source(Path(args.profile) / f"{c.name}.tsv") if args.profile else None,
+        "profile_rows": sum(1 for r in profile_rows if r.get("run") == c.short),
+    } for c in configs}
+
+    if len(configs) > 1:
+        out = fl.sweep_dir(EXPERIMENT, [c.short for c in configs], args.results_root)
+        print(f"comparison -> {out}")
+        write_directory(dockq_rows, profile_rows, configs, styles, baseline, out=out,
+                        column=args.runtime_column, subtitle=args.subtitle, sources=sources)
     if not args.no_individual:
-        for arm in arms:
-            out_i = fl.individual_dir(EXPERIMENT, arm, args.results_root)
+        for c in configs:
+            out_i = fl.individual_dir(EXPERIMENT, c.short, args.results_root)
             print(f"individual -> {out_i}")
-            write_directory(dockq_rows, profile_rows, [arm], labels, styles, None, out=out_i,
-                            column=args.runtime_column, set_name=None, title=labels[arm],
-                            sources={arm: sources[arm]}, missing=[])
+            write_directory(dockq_rows, profile_rows, [c], styles, None, out=out_i,
+                            column=args.runtime_column, subtitle=c.label,
+                            sources={c.short: sources[c.short]})
     return 0
 
 

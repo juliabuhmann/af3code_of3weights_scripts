@@ -1,6 +1,7 @@
 {
   "name_tag": "of3kit_big_templateoff",
   "label": "OF3 code + Anthropic kit `big` with the card table's reach gate left in place (the H100 value, 4500 tokens), no templates, openbind weights",
+  "short": "of3kit-big-gated",
   "tag": "OF3 code / kit big, reach gate at 4500 / openbind weights",
   "engine": "of3",
   "weights": "openbind",

@@ -1,3 +1,0 @@
-run	label	is_baseline	n_common_dockq	dockq_median	dockq_mean	n_scored	frac_acceptable	frac_medium	frac_high	n_common_runtime	model_s_median	model_s_total	dockq_delta_median	n_better_005	n_worse_005	speedup_median
-af3_openbind	AF3 code (templates on)	true	203	0.7020	0.5599	203	0.7340	0.6305	0.4089	203	71.0	20468				
-af3_openbind_templateoff	AF3 code (templates off)	false	203	0.6710	0.5254	203	0.6946	0.5813	0.3350	203	69.4	19097	-0.0010	20	31	1.00

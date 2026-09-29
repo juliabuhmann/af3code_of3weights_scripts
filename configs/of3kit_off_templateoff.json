@@ -1,6 +1,7 @@
 {
   "name_tag": "of3kit_off_templateoff",
   "label": "OF3 code + stock OpenFold3 0.5.0 as the kit defines it, no templates, openbind weights",
+  "short": "of3kit-off",
   "tag": "OF3 code / kit off / openbind weights",
   "engine": "of3",
   "weights": "openbind",

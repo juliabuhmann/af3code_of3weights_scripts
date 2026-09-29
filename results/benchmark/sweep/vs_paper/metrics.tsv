@@ -1,3 +1,0 @@
-run	label	is_baseline	n_common_dockq	dockq_median	dockq_mean	n_scored	frac_acceptable	frac_medium	frac_high	dockq_delta_median	n_better_005	n_worse_005
-af3_native	AF3 code / AF3 weights (templates on)	true	203	0.7060	0.5752	203	0.7586	0.6305	0.4089			
-zheng_af3_local	zheng_af3_local (templates ?)	false	203	0.7110	0.5894	206	0.7635	0.6700	0.4335	+0.0000	17	11

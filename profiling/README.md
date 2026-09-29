@@ -128,8 +128,8 @@ in that table, so a job that runs out of wall clock is resumed by submitting it 
 Then plot (matplotlib comes from the pixi environment):
 
 ```bash
-pixi run plot-scaling --set codebases          # -> results/scaling/sweep/codebases/
-pixi run plot-scaling --set of3kit_rtxpro6000  # -> results/scaling/sweep/of3kit_rtxpro6000/
+pixi run plot-scaling --arms af3-ob of3-ob            # -> results/scaling/sweep/af3-ob_of3-ob/
+pixi run plot-scaling --arms af3-ob of3kit-off of3kit-big --speedup-at 5000
 ```
 
 One invocation writes every figure of the set's directory plus one directory per arm, so
@@ -138,7 +138,7 @@ a figure can never be older than the table beside it. `plot_vram.py` reads
 prints the per-size table it plotted, and takes `--metric peak_vram_gib` to plot the
 nvidia-smi trace instead of the default live-buffer high-water. `--arms A B [--baseline A]`
 compares an unregistered pair for a quick look; register the comparison in
-`configs/figure_sets.json` to keep it.
+the directory name, which is the record of what was compared.
 
 ## A third way to launch the OF3 engine: Anthropic's optimization kit
 
@@ -295,57 +295,49 @@ for arm in af3_openbind_templateoff_a100 af3kit_off_p2_templateoff_a100 \
 done
 # A job that runs out of wall clock leaves every finished size in <arm>/vram_sweep.tsv; submitting
 # the same line again resumes at the first size not yet recorded.
-pixi run plot-scaling --set af3kit_a100            # results/scaling/sweep/af3kit_a100/
+pixi run plot-scaling --arms af3-ob-a100 af3kit-off-a100 af3kit-exact-a100 af3kit-fast-a100 af3kit-big-a100
 ```
 
-## Where figures go, and the relative view
+## Where figures go
 
-Figures live under `results/scaling/`, in the layout
-[`scripts/figure_layout.py`](../scripts/figure_layout.py) defines for the whole
-repository: `sweep/<set>/` for a comparison of arms, `individual_runs/<arm>/` for one arm
-alone. A set is an entry in [`configs/figure_sets.json`](../configs/figure_sets.json) --
-its arms in legend order, its baseline, its title. File names are fixed, and every figure
-of a directory is rewritten on each invocation, so a re-run overwrites rather than
-accumulates and no figure outlives the table beside it:
+Every arm config carries a `short` -- `af3-ob`, `of3kit-big`, `af3-ob-a100` -- and that
+string is the arm everywhere a person sees it: on the command line, in the legend, and in
+the path. A comparison is written to a directory named after the arms it holds, in the order
+given, and the FIRST arm is the baseline:
+
+```
+results/scaling/sweep/af3-ob_of3kit-big_af3-ob-a100_af3kit-big-a100/
+results/scaling/individual_runs/af3-ob/
+```
+
+There is no registry of named comparisons: the directory name is the record of what was
+compared. To see the arms available, run the plotter with no arms.
 
 | file | what |
 |---|---|
-| `vram_vs_tokens.png` | peak memory vs tokens, absolute |
+| `vram_vs_tokens.png` | peak live GPU memory vs tokens |
+| `runtime_vs_tokens.png` | model time (featurisation + inference) vs tokens |
+| `inference_vs_tokens.png` | the inference half alone |
 | `wall_vs_tokens.png` | the launcher process start to exit for ONE query: the same work plus interpreter or container start, weight loading and writing the structures out. Not a throughput number -- see below |
-| `runtime_vs_tokens.png` | model time (featurisation + inference) vs tokens, absolute. Where a set names a `speedup_at` token count, each arm's marker at that size is labelled with its speed-up over the baseline -- 5,000 tokens for `of3kit_rtxpro6000`, the size the pooled scheme actually runs |
-| `ratio_vs_tokens.png` | every arm **relative to the production engine** on that card: speed-up (baseline time / arm time, >1 faster) and peak memory as a fraction of the baseline's (<1 less), at the token counts both ran. Sweeps with a baseline only |
+| `ratio_vs_tokens.png` | every other arm relative to the baseline: speed-up (>1 faster) and peak memory as a fraction of the baseline's (<1 less), at the token counts both ran |
 | `metrics.tsv` | every plotted row, host columns dropped |
-| `manifest.json` | the arms in legend order, the baseline, each arm's source table and row count, the figures written, the commit that drew them |
+| `manifest.json` | the arms and the config each short resolved to, the baseline, each arm's source table and row count, the figures, the commit |
 
 ```bash
-pixi run plot-scaling --set af3kit_a100                  # the set's directory
-pixi run plot-scaling --set af3kit_a100 --no-individual  # without the per-arm directories
+pixi run plot-scaling --arms af3-ob of3kit-big --speedup-at 5000
+pixi run plot-scaling --arms af3-ob                      # one arm, into individual_runs/
+pixi run plot-scaling --arms                             # list the arms
 ```
 
-A legend entry is the arm config's `tag` as this repository has it now, minus any axis every
-arm in the figure agrees on (the weights, when they all run the same ones -- the title says so).
-Only the display label follows the repository; the axes a row is read by (engine, weights,
-templates) still come from the config copied beside the data at submit time, so they describe
-what actually ran. Renaming a series therefore costs a re-plot, not a re-run.
+Each arm's colour comes from [`configs/arm_style.json`](../configs/arm_style.json), keyed by
+the same short, and never changes between figures. Colour is the only channel that varies:
+every series is drawn with the same marker and a solid line. Two arms in one figure may not
+share a colour; the plotting scripts refuse rather than draw them the same.
 
-Each arm's colour comes from
-[`configs/arm_style.json`](../configs/arm_style.json) and never change between figures, so
-the same curve is the same arm everywhere. Two arms in one figure may not share a colour;
-the plotting scripts refuse rather than draw them the same. Colour is the only channel that
-varies: every series is drawn with the same marker and a solid line.
+A column a table does not carry is never reconstructed from the ones it does. The figure
+that needed it is skipped, and names the arms that were missing it, so the fix is a
+re-sweep rather than a derived number nobody can trace.
 
-The relative figure is the one a decision reads off: it answers "how much faster or slower than
-what we run today, at the sizes we run". Two things to keep in mind when reading it.
-
-* **It only exists where the baseline ran.** An arm that reaches further than the baseline shows
-  nothing beyond the baseline's last size; that reach is a result the absolute figure carries.
-  Dotted verticals mark where an arm stopped before the baseline did.
-* **Warm-up parity.** The kit arms run each size once untimed first (`warmup_runs: 1`), because
-  they compile kernels per shape inside the timed line; the original `af3_openbind_templateoff`
-  table predates that option and was timed cold. At small sizes AlphaFold 3's XLA compile is a
-  large share of `model_s`, so the ratios there flatter the kit arms. The A100 baseline
-  (`af3_openbind_templateoff_a100`) was run with `warmup_runs: 1` and is fair at every size;
-  re-run the RTX PRO 6000 baseline with it before quoting its small-size ratios.
 
 ## Two measurement traps
 
@@ -429,6 +421,5 @@ killer) is not a GPU limit and is reported separately.
 | `setup_kit_env.sh` | build the Anthropic kit's virtual environment, step by step |
 
 The figure sets and the per-arm colours are repository-wide, not profiling-specific:
-[`configs/figure_sets.json`](../configs/figure_sets.json),
 [`configs/arm_style.json`](../configs/arm_style.json),
 [`scripts/figure_layout.py`](../scripts/figure_layout.py).

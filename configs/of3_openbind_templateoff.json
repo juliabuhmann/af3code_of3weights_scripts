@@ -1,6 +1,7 @@
 {
   "name_tag": "of3_openbind_templateoff",
   "label": "OF3 code + OpenFold3 openbind weights, no templates",
+  "short": "of3-ob",
   "tag": "OF3 code / openbind weights",
 
   "engine": "of3",

@@ -1,0 +1,41 @@
+{
+  "experiment": "benchmark",
+  "arms": [
+    {
+      "short": "af3-ob-tmpl",
+      "config": "af3_openbind.json",
+      "name_tag": "af3_openbind",
+      "label": "AF3 code + OpenFold3 openbind weights"
+    },
+    {
+      "short": "af3-ob",
+      "config": "af3_openbind_templateoff.json",
+      "name_tag": "af3_openbind_templateoff",
+      "label": "AF3 code + OpenFold3 openbind weights, no templates"
+    }
+  ],
+  "baseline": "af3-ob-tmpl",
+  "sources": {
+    "af3-ob-tmpl": {
+      "dockq_table": "$AF3OF3_BASE_DIR/results/dockq/af3_openbind.tsv",
+      "dockq_rows": 203,
+      "profile_table": "$AF3OF3_BASE_DIR/results/profiling/af3_openbind.tsv",
+      "profile_rows": 203
+    },
+    "af3-ob": {
+      "dockq_table": "$AF3OF3_BASE_DIR/results/dockq/af3_openbind_templateoff.tsv",
+      "dockq_rows": 203,
+      "profile_table": "$AF3OF3_BASE_DIR/results/profiling/af3_openbind_templateoff.tsv",
+      "profile_rows": 203
+    }
+  },
+  "figures": [
+    "dockq_distribution.png",
+    "dockq_scatter.png",
+    "runtime_paired.png",
+    "runtime_vs_size.png"
+  ],
+  "script": "scripts/06_plot_comparison.py",
+  "git_commit": "12fcd68+dirty",
+  "runtime_column": "model_s"
+}

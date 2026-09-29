@@ -1,6 +1,7 @@
 {
   "name_tag": "af3kit_fast_p2_templateoff_a100",
   "label": "AF3 code + Anthropic kit `fast` + OpenFold3 preview-2 weights, no templates, A100",
+  "short": "af3kit-fast-a100",
   "tag": "AF3 kit fast / p2",
   "engine": "af3",
   "weights": "p2",

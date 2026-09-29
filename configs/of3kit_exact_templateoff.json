@@ -1,6 +1,7 @@
 {
   "name_tag": "of3kit_exact_templateoff",
   "label": "OF3 code + Anthropic kit `exact` (outputs identical to stock), no templates, openbind weights",
+  "short": "of3kit-exact",
   "tag": "OF3 code / kit exact / openbind weights",
   "engine": "of3",
   "weights": "openbind",

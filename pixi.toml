@@ -57,8 +57,9 @@ collect-profile = "python scripts/04_collect_profiling.py"
 score-dockq     = "python scripts/05_score_dockq.py"
 plot            = "python scripts/06_plot_comparison.py"
 
-# Figures. Both take --set NAME from configs/figure_sets.json and write one directory
-# under results/<experiment>/, with fixed file names; see scripts/figure_layout.py.
+# Figures. Both take --arms SHORT [SHORT ...] (the `short` in each arm's config; run either
+# with no arms to list them) and write one directory named after those arms under
+# results/<experiment>/; see scripts/figure_layout.py.
 plot-benchmark  = "python scripts/06_plot_comparison.py"
 plot-scaling    = "python profiling/plot_vram.py"
 

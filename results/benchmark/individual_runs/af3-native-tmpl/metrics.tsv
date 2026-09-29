@@ -1,0 +1,2 @@
+run	label	is_baseline	n_common_dockq	dockq_median	dockq_mean	n_scored	frac_acceptable	frac_medium	frac_high	n_common_runtime	model_s_median	model_s_total
+af3-native-tmpl	af3-native-tmpl	false	203	0.7060	0.5752	203	0.7586	0.6305	0.4089	203	71.0	20378
