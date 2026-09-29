@@ -27,8 +27,8 @@
     "gpu": "nvidia_rtx_pro_6000:1",
     "gpumem": "90g",
     "cpus": 8,
-    "mem_per_cpu": "8g",
-    "time": "4:00:00"
+    "mem_per_cpu": "16g",
+    "time": "24:00:00"
   },
   "notes": [
     "mode off: upstream's own entry point on the kit's STOCK configuration (configs/of3kit_stock_runner.yml).",

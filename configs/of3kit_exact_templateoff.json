@@ -27,8 +27,8 @@
     "gpu": "nvidia_rtx_pro_6000:1",
     "gpumem": "90g",
     "cpus": 8,
-    "mem_per_cpu": "8g",
-    "time": "4:00:00"
+    "mem_per_cpu": "16g",
+    "time": "24:00:00"
   },
   "notes": [
     "mode exact: placement, scheduling and caching only, plus kernels the kit admits per call shape after an",

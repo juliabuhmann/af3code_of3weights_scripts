@@ -13,6 +13,7 @@
   "ckpt": "$HOME/.openfold3/of3-ob-2025-06-30-174k.pt",
   "runner_yaml": "configs/of3_runner.yml",
 
+  "warmup_runs": 1,
   "num_recycles": 3,
   "num_diffusion_samples": 5,
   "model_seed": 42,
@@ -21,8 +22,8 @@
     "gpu": "nvidia_rtx_pro_6000:1",
     "gpumem": "90g",
     "cpus": 8,
-    "mem_per_cpu": "8g",
-    "time": "4:00:00"
+    "mem_per_cpu": "16g",
+    "time": "24:00:00"
   },
 
   "notes": [
@@ -53,6 +54,8 @@
     "",
     "of3_src / of3_env / ckpt are cluster paths; override them without editing this",
     "file via AF3OF3_OF3_SRC, AF3OF3_OF3_ENV and AF3OF3_OF3_CKPT. runner_yaml is",
-    "resolved relative to the repository when it is not absolute."
+    "resolved relative to the repository when it is not absolute.",
+    "",
+    "warmup_runs 1: each size is run once untimed before the recorded one, so the recorded run finds the kernels already compiled and autotuned. Without it this arm would be the only one measured cold while every other arm is measured warm, and it is the baseline the others are quoted against -- Triton compiles on the first call inside the timed line, so the compilation would land in its inference timer and inflate every speed-up read off it."
   ]
 }

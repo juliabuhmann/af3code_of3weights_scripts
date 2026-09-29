@@ -12,6 +12,7 @@
   "model_dir": "/models",
   "of3_weights": true,
 
+  "warmup_runs": 1,
   "num_recycles": 3,
   "num_diffusion_samples": 5,
   "model_seed": 42,
@@ -21,7 +22,7 @@
     "gpumem": "90g",
     "cpus": 8,
     "mem_per_cpu": "8g",
-    "time": "4:00:00"
+    "time": "24:00:00"
   },
 
   "notes": [
@@ -39,6 +40,8 @@
     "",
     "This arm is also the one matched to of3_openbind_templateoff.json: the OF3",
     "converter carries no templates over, so a like-for-like code comparison needs the",
-    "AF3 side run without them too."
+    "AF3 side run without them too.",
+    "",
+    "warmup_runs 1: each size is run once untimed before the recorded one, so the recorded run finds the kernels already compiled and autotuned. Without it this arm would be the only one measured cold while every other arm is measured warm, and it is the baseline the others are quoted against -- XLA compiles per shape inside the timed line, so the compilation would land in its inference timer and inflate every speed-up read off it."
   ]
 }
