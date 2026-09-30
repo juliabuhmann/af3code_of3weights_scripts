@@ -101,6 +101,14 @@ A third launcher for the OpenFold3 arm — Anthropic's `openfold3_ob0` optimizat
 figure above, which is the two codebases alone. The DockQ figures below predate the kit and do not
 include it.
 
+A fourth codebase on the openbind weights, Anthropic's `af3_torch` kit (xfold, the PyTorch port of
+AlphaFold 3) in its `big` mode, runs the Benchmark-IV set through the same harness from its container
+image (`configs/af3torchkit_big_ob_templateoff.json` and `configs/af3torchkit_big_ob.json`; engine
+`af3torch_kit`, `slurm/predict_af3torch_kit.sbatch`). The image is built from the fork branch
+`add-af3torch-openbind-porter` of juliabuhmann/uplifting-biomolecular-modeling, which ports the openbind
+checkpoint into xfold's parameter layout the way the JAX fork above does; it is scored with the stages
+below like any af3 arm. Not yet run at the time of writing.
+
 ### Performance
 
 Whether the substitution breaks anything, at fixed weights: the AlphaFold 3 codebase
