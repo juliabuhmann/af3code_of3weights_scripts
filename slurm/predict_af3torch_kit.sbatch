@@ -9,11 +9,11 @@
 # time budget, one <entry>.log + <entry>.meta.json per entry under $OUT_DIR/_profiling — so stages 04
 # and 05 read this arm like the af3 ones. What differs is the call:
 #
-#   singularity run --nv --cleanenv <image> pred --config $KIT_CONFIG --mode $KIT_MODE --allow-partial
-#       --json_path=<entry>.json --output_dir=<node-local dir> --model_dir=$MODEL_DIR
-#       --norun_data_pipeline --num_recycles=N --num_diffusion_samples=S
+#   singularity exec --nv --cleanenv --pwd /kit/af3_torch <image> bash run.sh pred --config $KIT_CONFIG
+#       --mode $KIT_MODE --allow-partial --json_path=<entry>.json --output_dir=<node-local dir>
+#       --model_dir=$MODEL_DIR --norun_data_pipeline --num_recycles=N --num_diffusion_samples=S
 #
-# The image's runscript is the kit's `run.sh`; `pred` is its inference verb, the flags after it are
+# `run.sh` is the kit's entry point inside the image; `pred` is its inference verb, the flags after it are
 # xfold's own (the kit's --num_recycles default is 10, hence the explicit value). --allow-partial: on a
 # card outside the kit's certified set (this one, cc 12.0) a kernel row may refuse by name, which the kit
 # otherwise turns into exit 3; the DONE line then says partial=allowed:<what>. AF3_TORCH_PARAMS_DIR names
@@ -93,10 +93,14 @@ run_stripper() { python3 "$STRIPPER" "$@"; }
 
 # The container call shared by the check and every entry: --cleanenv so the host's python / CUDA variables
 # never reach the kit's venvs, the kit's variables passed explicitly (the image presets its interpreters).
+# `exec ... bash run.sh <verb>` rather than `run <verb>`: the image is the kit's Dockerfile converted by
+# `apptainer build docker://...`, which carries no runscript (the kit's own apptainer.def would add one), so
+# `run` would look for a program named after the verb. The kit's tree sits at /kit/af3_torch in the image
+# (its WORKDIR) and its venv is on the image's PATH.
 kit() {
     local env_levers=()
     [[ -n "$KIT_LEVERS_OFF" ]] && env_levers=(--env "MODEL_OPT_LEVERS_OFF=$KIT_LEVERS_OFF")
-    "$SINGULARITY" run --nv --cleanenv \
+    "$SINGULARITY" exec --nv --cleanenv --pwd /kit/af3_torch \
         --bind "$WORK_DIR:$WORK_DIR" \
         --bind "$SCRATCH:$SCRATCH" \
         --bind "$MODEL_DIR:$MODEL_DIR:ro" \
@@ -105,7 +109,7 @@ kit() {
         --env "TMPDIR=$SCRATCH/tmp" \
         --env "PYTHONHASHSEED=0" \
         ${env_levers[@]+"${env_levers[@]}"} \
-        "$IMAGE" "$@"
+        "$IMAGE" bash run.sh "$@"
 }
 
 echo "=== af3_torch kit inference ==="
