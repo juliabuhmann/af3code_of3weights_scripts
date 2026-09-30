@@ -36,6 +36,8 @@ Columns written
                       featurisation + inference of this query, excluding interpreter
                       or container startup and parameter loading.
                         af3   featurisation_s + inference_s from the AF3 log.
+                        af3torch_kit   the kit's featurise STEP + (ITEM forward_s +
+                              postprocess STEP), the same two pieces off its own lines.
                         of3   runtime_s from OF3's per-seed timing.json, summed over
                               seeds, which covers its predict loop for the query.
                       NOT YET IDENTICAL in what they include. OpenFold3 builds its
@@ -84,6 +86,13 @@ INFERENCE_RE = re.compile(
     rf"Running model inference and extracting output structures {_SEED_CLAUSE} "
     rf"took\s+([\d.]+) seconds")
 
+# The af3_torch kit's own lines (engine af3torch_kit, slurm/predict_af3torch_kit.sbatch): featurisation is
+# its featurise STEP, "inference" is the GPU forward of the ITEM plus the postprocess STEP (the writers) —
+# the two pieces AF3's "inference and extracting output structures" timer covers together.
+KIT_FEATURISE_RE = re.compile(r"^\[af3-torch-opt\] STEP step=featurise .*?wall_s=([\d.]+)", re.M)
+KIT_FORWARD_RE = re.compile(r"^\[af3-torch-opt\] ITEM name=\S+ .*?forward_s=([\d.]+)", re.M)
+KIT_POSTPROCESS_RE = re.compile(r"^\[af3-torch-opt\] STEP step=postprocess .*?wall_s=([\d.]+)", re.M)
+
 MIB_PER_GIB = 1024.0
 
 
@@ -100,6 +109,18 @@ def parse_log(path: Path) -> tuple[float | None, float | None]:
     infer = INFERENCE_RE.search(text)
     return (float(feat.group(1)) if feat else None,
             float(infer.group(1)) if infer else None)
+
+
+def parse_kit_log(path: Path) -> tuple[float | None, float | None]:
+    """(featurisation_s, inference_s) off the af3_torch kit's lines; None where a line is missing."""
+    if not path.is_file():
+        return None, None
+    text = path.read_text(errors="replace")
+    feat = KIT_FEATURISE_RE.search(text)
+    fwd = KIT_FORWARD_RE.search(text)
+    post = KIT_POSTPROCESS_RE.search(text)
+    infer = (float(fwd.group(1)) + (float(post.group(1)) if post else 0.0)) if fwd else None
+    return (float(feat.group(1)) if feat else None, infer)
 
 
 def sacct_lookup(job_ids: set[str]) -> dict[str, dict]:
@@ -193,7 +214,10 @@ def main() -> int:
             meta = json.loads(meta_path.read_text())
             entry = entries.get(entry_id, {})
 
-            feat_s, infer_s = parse_log(prof_dir / f"{entry_id}.log")
+            if meta.get("engine") == "af3torch_kit":
+                feat_s, infer_s = parse_kit_log(prof_dir / f"{entry_id}.log")
+            else:
+                feat_s, infer_s = parse_log(prof_dir / f"{entry_id}.log")
 
             wall_s = meta.get("wall_s")
             if meta.get("engine") == "of3":

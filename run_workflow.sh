@@ -12,7 +12,8 @@
 #   build-of3-inputs     Convert those JSONs into OpenFold3 query JSONs (MSAs only).
 #   submit-predictions   sbatch the GPU array for ONE config (run once per arm).
 #                        Dispatches on the config's `engine`: af3 -> predict.sbatch,
-#                        of3 -> predict_of3.sbatch.
+#                        of3 -> predict_of3.sbatch, af3torch_kit -> predict_af3torch_kit.sbatch
+#                        (Anthropic's af3_torch kit from its image, on the af3 inputs).
 #   status               How many predictions each arm has finished.
 #   collect-profiling    Inference time -> results/profiling/<arm>.tsv, one per arm.
 #   score                DockQ vs cleanNative -> results/dockq/<arm>.tsv (runs HERE).
@@ -74,7 +75,7 @@
 #
 # ARMS AND THE TEMPLATES SWITCH
 # -----------------------------
-# An arm is a config in configs/, and it declares three axes — `engine` (af3|of3),
+# An arm is a config in configs/, and it declares three axes — `engine` (af3|of3|af3torch_kit),
 # `weights` (af3_native|openbind) and `use_templates` (true|false) — plus a
 # `name_tag` that names its output directory. All three are required; nothing is
 # guessed. The config is copied to predictions/<name_tag>/config.json at submit
@@ -570,8 +571,48 @@ submit-predictions)
         echo "out_dir       : $OUT_DIR"
         submit "${CMD[@]}"
         ;;
+    af3torch_kit)
+        # Anthropic's af3_torch optimization kit (xfold) from its container image: the af3 inputs and
+        # protocol (predict_todo.txt, templates stripped per USE_TEMPLATES, AlphaFold 3's output layout),
+        # the kit's `pred --mode` entry point. See configs/af3torchkit_*.json and slurm/predict_af3torch_kit.sbatch.
+        TODO="$WORK_DIR/predict_todo.txt"
+        [[ -f "$TODO" ]] || { echo "ERROR: $TODO not found — run --stage build-jsons first" >&2; exit 1; }
+        N=$(grep -c . "$TODO" || true)
+        [[ "$N" -gt 0 ]] || { echo "ERROR: $TODO is empty" >&2; exit 1; }
+        chunk_plan "$N"
+
+        KIT_KIND=$(cfg launcher.kind)
+        [[ "$KIT_KIND" == "af3_torch_kit" ]] || { echo "ERROR: engine af3torch_kit needs launcher.kind af3_torch_kit in $CONFIG (got '$KIT_KIND')" >&2; exit 1; }
+        # AF3OF3_KIT_IMAGE overrides the config, as AF3OF3_IMAGE does for the af3 arms.
+        KIT_IMAGE="${AF3OF3_KIT_IMAGE:-$(expand_home "$(cfg launcher.image)")}"
+        KIT_MODE=$(cfg launcher.mode); KIT_CONFIG=$(cfg launcher.kit_config); KIT_LEVERS_OFF=$(cfg launcher.levers_off)
+        MODEL_DIR=$(expand_home "$(cfg model_dir)")
+        RECYCLES=$(cfg num_recycles)
+        [[ -n "$KIT_MODE" ]] || { echo "ERROR: launcher.mode missing in $CONFIG" >&2; exit 1; }
+        [[ -f "$KIT_IMAGE" ]] || { echo "ERROR: kit image not found: $KIT_IMAGE (launcher.image / AF3OF3_KIT_IMAGE)" >&2; exit 1; }
+        [[ -f "$MODEL_DIR/of3_ported_weights.bin.zst" ]] || { echo "ERROR: no converted weights at $MODEL_DIR (the kit's 'run.sh install --weights DIR --fetch --variant $(cfg launcher.variant)' output)" >&2; exit 1; }
+
+        CMD=(sbatch
+            --job-name="$NAME_TAG"
+            --array="$(array_spec "$NTASKS")"
+            --gpus="$GPU"
+            --gres="gpumem:$GPUMEM"
+            --cpus-per-task="$CPUS"
+            --mem-per-cpu="$MEM"
+            --time="$TIME"
+            --output="$LOGS/%x_%A_%a.out"
+            --export="ALL,WORK_DIR=$WORK_DIR,OUT_DIR=$OUT_DIR,REPO_DIR=$SCRIPT_DIR,IMAGE=$KIT_IMAGE,MODEL_DIR=$MODEL_DIR,KIT_MODE=$KIT_MODE,KIT_CONFIG=${KIT_CONFIG:-h100},KIT_LEVERS_OFF=$KIT_LEVERS_OFF,USE_TEMPLATES=$USE_TEMPLATES,NUM_RECYCLES=$RECYCLES,NUM_DIFFUSION_SAMPLES=$SAMPLES,CHUNK_STRIDE=$CHUNK_STRIDE,TIME_BUDGET_S=$TIME_BUDGET_S,PER_ENTRY_RESERVE_S=$PER_ENTRY_RESERVE"
+            "$SCRIPT_DIR/slurm/predict_af3torch_kit.sbatch")
+
+        echo "array         : submitting $(array_spec "$NTASKS")"
+        echo "kit image     : $KIT_IMAGE  ($(cfg launcher.image_ref))"
+        echo "kit           : mode=$KIT_MODE  config=${KIT_CONFIG:-h100}  variant=$(cfg launcher.variant)  levers_off=${KIT_LEVERS_OFF:-none}"
+        echo "model_dir     : $MODEL_DIR"
+        echo "out_dir       : $OUT_DIR"
+        submit "${CMD[@]}"
+        ;;
     *)
-        echo "ERROR: unknown engine '$ENGINE' in $CONFIG (expected af3 or of3)" >&2
+        echo "ERROR: unknown engine '$ENGINE' in $CONFIG (expected af3, of3 or af3torch_kit)" >&2
         exit 1
         ;;
     esac
