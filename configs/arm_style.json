@@ -18,23 +18,72 @@
     "      green #008300  violet #4a3aa7  red #e34948",
     "`role` is documentation: nothing reads it, it says why a slot was chosen."
   ],
-
-  "af3-ob":      {"color": "#2a78d6", "role": "AF3 code, openbind weights, RTX PRO 6000 -- the production engine"},
-  "af3-ob-a100": {"color": "#e34948", "role": "the same on the A100"},
-  "of3-ob":      {"color": "#eb6834", "role": "stock OpenFold3 code, RTX PRO 6000"},
-
-  "of3kit-off":       {"color": "#4a3aa7", "role": "OpenFold3 kit, mode off"},
-  "of3kit-exact":     {"color": "#eda100", "role": "OpenFold3 kit, mode exact"},
-  "of3kit-fast":      {"color": "#1baf7a", "role": "OpenFold3 kit, mode fast"},
-  "of3kit-big":       {"color": "#008300", "role": "OpenFold3 kit, mode big"},
-  "of3kit-big-gated": {"color": "#e87ba4", "role": "the same with the card table's reach gate left in place"},
-
-  "af3kit-off-a100":   {"color": "#4a3aa7", "role": "AlphaFold 3 kit, mode off"},
-  "af3kit-exact-a100": {"color": "#eda100", "role": "AlphaFold 3 kit, mode exact"},
-  "af3kit-fast-a100":  {"color": "#1baf7a", "role": "AlphaFold 3 kit, mode fast"},
-  "af3kit-big-a100":   {"color": "#eb6834", "role": "AlphaFold 3 kit, mode big -- orange, not the OpenFold3 kit's green: the two `big` arms ARE compared with each other"},
-
-  "af3-native-tmpl": {"color": "#008300", "role": "AF3 code and weights, templates on (benchmark only)"},
-  "af3-ob-tmpl":     {"color": "#4a3aa7", "role": "AF3 code, openbind weights, templates on (benchmark only)"},
-  "zheng":           {"color": "#eda100", "role": "Zheng & Peng's own AlphaFold 3 predictions (benchmark only)"}
+  "af3-ob": {
+    "color": "#2a78d6",
+    "role": "AF3 code, openbind weights, RTX PRO 6000 -- the production engine"
+  },
+  "af3-ob-a100": {
+    "color": "#e34948",
+    "role": "the same on the A100"
+  },
+  "of3-ob": {
+    "color": "#eb6834",
+    "role": "stock OpenFold3 code, RTX PRO 6000"
+  },
+  "of3kit-off": {
+    "color": "#4a3aa7",
+    "role": "OpenFold3 kit, mode off"
+  },
+  "of3kit-exact": {
+    "color": "#eda100",
+    "role": "OpenFold3 kit, mode exact"
+  },
+  "of3kit-fast": {
+    "color": "#1baf7a",
+    "role": "OpenFold3 kit, mode fast"
+  },
+  "of3kit-big": {
+    "color": "#008300",
+    "role": "OpenFold3 kit, mode big"
+  },
+  "of3kit-big-gated": {
+    "color": "#e87ba4",
+    "role": "the same with the card table's reach gate left in place"
+  },
+  "af3kit-off-a100": {
+    "color": "#4a3aa7",
+    "role": "AlphaFold 3 kit, mode off"
+  },
+  "af3kit-exact-a100": {
+    "color": "#eda100",
+    "role": "AlphaFold 3 kit, mode exact"
+  },
+  "af3kit-fast-a100": {
+    "color": "#1baf7a",
+    "role": "AlphaFold 3 kit, mode fast"
+  },
+  "af3kit-big-a100": {
+    "color": "#eb6834",
+    "role": "AlphaFold 3 kit, mode big -- orange, not the OpenFold3 kit's green: the two `big` arms ARE compared with each other"
+  },
+  "af3-native-tmpl": {
+    "color": "#008300",
+    "role": "AF3 code and weights, templates on (benchmark only)"
+  },
+  "af3-ob-tmpl": {
+    "color": "#4a3aa7",
+    "role": "AF3 code, openbind weights, templates on (benchmark only)"
+  },
+  "zheng": {
+    "color": "#eda100",
+    "role": "Zheng & Peng's own AlphaFold 3 predictions (benchmark only)"
+  },
+  "af3torchkit-big-ob": {
+    "color": "#e87ba4",
+    "role": "AF3-torch kit (xfold) big, openbind weights, templates off (benchmark) -- magenta: drawn beside af3-ob (blue) and of3-ob (orange); shares the hue with of3kit-big-gated, a scaling-only arm never in the same figure"
+  },
+  "af3torchkit-big-ob-tmpl": {
+    "color": "#1baf7a",
+    "role": "the same with templates on (benchmark) -- aqua: drawn beside af3-ob-tmpl (violet) and af3-native-tmpl (green); shares the hue with the kits' fast arms, scaling-only"
+  }
 }
