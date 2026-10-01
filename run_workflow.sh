@@ -97,7 +97,15 @@
 #   --base-dir PATH      Where ALL generated data goes. Nothing is written into the
 #                        repo. Default: $DEFAULT_BASE_DIR below.
 #   --config FILE        configs/*.json — required for submit-predictions.
-#   --subset dimers|all  Which entries to work on (default: dimers, n_chains == 2).
+#   --subset hetero|dimers|all
+#                        Which entries DockQ scoring and the DockQ figures work on
+#                        (default: hetero). hetero = heterodimer + heteromer, the
+#                        entries whose chains are not all one sequence, so the
+#                        interface scored is a distinct binding partner rather than a
+#                        self-interface; dimers = every 2-chain entry, homodimers
+#                        included; all = the whole dataset. The plot stage applies the
+#                        same filter to the tables, so a table scored with a wider
+#                        subset still draws the narrower figure without a rescore.
 #   --msa-cache DIR      Existing AF3 MSA cache to reuse (repeatable).
 #                        Default: $DEFAULT_MSA_CACHE below.
 #   --db-dir DIR         AF3 search databases for submit-msa.
@@ -173,7 +181,7 @@ MAX_TEMPLATE_DATE="2021-09-30"
 STAGE=""
 BASE_DIR="$DEFAULT_BASE_DIR"
 CONFIG=""
-SUBSET="dimers"
+SUBSET="hetero"
 MSA_CACHES=()
 DB_DIR="$DEFAULT_DB_DIR"
 ARRAY_LIMIT=20
@@ -702,7 +710,7 @@ plot)
                                exit 1; }
     # shellcheck disable=SC2086 -- a space-separated list of short arm names, on purpose
     "${PY[@]}" "$SCRIPT_DIR/scripts/06_plot_comparison.py" \
-        "${ARGS[@]}" --arms $PLOT_ARMS --results-root "$FIGURES_DIR"
+        "${ARGS[@]}" --arms $PLOT_ARMS --results-root "$FIGURES_DIR" --subset "$SUBSET"
     ;;
 
 publish-results)

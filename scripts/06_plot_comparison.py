@@ -325,6 +325,13 @@ def main() -> int:
                     help="Which timing column the runtime figures use. model_s (default) is "
                          "featurisation+inference and is the only one comparable across engines.")
     ap.add_argument("--results-root", type=Path, default=fl.RESULTS_ROOT)
+    ap.add_argument("--subset", choices=["hetero", "dimers", "all"], default="hetero",
+                    help="Which scored entries enter the DockQ figures and metrics. hetero "
+                         "(default): heterodimer + heteromer only — the entries whose chains are not "
+                         "all one sequence, so the interface scored is a distinct binding partner. "
+                         "dimers: every 2-chain entry. all: every row in the tables. The filter is "
+                         "applied here as well as in scripts/05, so a table scored with a wider "
+                         "subset still draws a hetero-only figure.")
     ap.add_argument("--subtitle", default=None,
                     help="A line under each figure's title saying what the comparison is for")
     ap.add_argument("--no-individual", action="store_true",
@@ -349,6 +356,16 @@ def main() -> int:
         return rows
 
     dockq_rows = [r for r in load(args.dockq) if r.get("status") == "ok"]
+    # The DockQ subset (see --subset): applied to the TABLE rows, so a table scored with a wider
+    # subset draws the narrower figure without a rescore. Profiling rows are untouched: a runtime
+    # figure is about the engine, not about which interfaces are worth scoring.
+    if args.subset != "all":
+        before = len(dockq_rows)
+        if args.subset == "hetero":
+            dockq_rows = [r for r in dockq_rows if r.get("category") in ("heterodimer", "heteromer")]
+        else:
+            dockq_rows = [r for r in dockq_rows if (r.get("n_chains") or "").strip() == "2"]
+        print(f"  DockQ subset '{args.subset}': {len(dockq_rows)} of {before} scored rows")
     profile_rows = load(args.profile)
     present = {r.get("run") for r in dockq_rows} | {r.get("run") for r in profile_rows}
     missing = [c.short for c in configs if c.short not in present]
