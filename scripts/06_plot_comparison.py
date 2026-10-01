@@ -325,13 +325,13 @@ def main() -> int:
                     help="Which timing column the runtime figures use. model_s (default) is "
                          "featurisation+inference and is the only one comparable across engines.")
     ap.add_argument("--results-root", type=Path, default=fl.RESULTS_ROOT)
-    ap.add_argument("--subset", choices=["hetero", "dimers", "all"], default="hetero",
-                    help="Which scored entries enter the DockQ figures and metrics. hetero "
-                         "(default): heterodimer + heteromer only — the entries whose chains are not "
-                         "all one sequence, so the interface scored is a distinct binding partner. "
-                         "dimers: every 2-chain entry. all: every row in the tables. The filter is "
-                         "applied here as well as in scripts/05, so a table scored with a wider "
-                         "subset still draws a hetero-only figure.")
+    ap.add_argument("--subset", choices=["dimers", "hetero", "all"], default="dimers",
+                    help="Which scored entries enter the DockQ figures and metrics. dimers "
+                         "(default): every 2-chain entry, one native interface each. hetero: "
+                         "heterodimer + heteromer, the entries whose chains are not all one "
+                         "sequence. all: every row in the tables, higher-order oligomers included. "
+                         "The filter is applied here as well as in scripts/05, so a table scored "
+                         "with a wider subset still draws the narrower figure.")
     ap.add_argument("--subtitle", default=None,
                     help="A line under each figure's title saying what the comparison is for")
     ap.add_argument("--no-individual", action="store_true",

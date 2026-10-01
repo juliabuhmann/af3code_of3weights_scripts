@@ -341,12 +341,13 @@ def main() -> int:
                          "those are carried over from the arm's existing table and "
                          "only missing or failed entries are scored.")
     ap.add_argument("--select-by", choices=["best", "maxiptm"], default="best")
-    ap.add_argument("--subset", choices=["hetero", "dimers", "all"], default="hetero",
-                    help="Which entries to score. hetero (default): heterodimer + heteromer, "
-                         "the entries whose chains are NOT all the same sequence — the only ones "
-                         "whose interface DockQ measures a distinct binding partner rather than a "
-                         "self-interface. dimers: every 2-chain entry, homodimers included. "
-                         "all: every entry of the dataset.")
+    ap.add_argument("--subset", choices=["dimers", "hetero", "all"], default="dimers",
+                    help="Which entries to score. dimers (default): every 2-chain entry — one "
+                         "interface per complex, so DockQ needs no averaging and the number means "
+                         "the same thing on every row. hetero: heterodimer + heteromer, the entries "
+                         "whose chains are not all one sequence. all: every entry of the dataset, "
+                         "including the 3-to-11-chain homomers and heteromers, whose DockQ is a mean "
+                         "over native interfaces.")
     ap.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 1))
     ap.add_argument("--timeout", type=int, default=1800,
                     help="Per-entry DockQ timeout in seconds")
@@ -362,11 +363,12 @@ def main() -> int:
                          f"Install it with the analysis environment: pixi install")
 
     entries = read_tsv(args.dataset_dir / "entries.tsv")
-    # HETERO is the default subset. Benchmark-IV holds no monomers — every entry has at least two
-    # chains — but 113 of its 206 entries are homodimers and another 57 are homomers, i.e. complexes
-    # of one repeated sequence. DockQ on those scores a self-interface, which answers a different
-    # question from "did the model dock these two different proteins correctly"; mixing the two into
-    # one median lets the homo-interfaces, the large majority here, carry the comparison.
+    # The dataset holds no monomers: every entry has at least two chains. Its four categories are
+    # homodimer (2 chains, 1 sequence; 113 entries), heterodimer (2 chains, 2 sequences; 18),
+    # homomer (3-8 chains, 1 sequence; 57) and heteromer (3-11 chains, 2-4 sequences; 18).
+    # DIMERS is the default: one native interface per complex, so its DockQ is that interface rather
+    # than a mean over several, and the column means the same thing on every row. `hetero` narrows
+    # further to the complexes whose chains are not all one sequence.
     if args.subset == "hetero":
         entries = [e for e in entries if e["category"] in ("heterodimer", "heteromer")]
     elif args.subset == "dimers":

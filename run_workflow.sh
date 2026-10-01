@@ -97,15 +97,17 @@
 #   --base-dir PATH      Where ALL generated data goes. Nothing is written into the
 #                        repo. Default: $DEFAULT_BASE_DIR below.
 #   --config FILE        configs/*.json — required for submit-predictions.
-#   --subset hetero|dimers|all
+#   --subset dimers|hetero|all
 #                        Which entries DockQ scoring and the DockQ figures work on
-#                        (default: hetero). hetero = heterodimer + heteromer, the
-#                        entries whose chains are not all one sequence, so the
-#                        interface scored is a distinct binding partner rather than a
-#                        self-interface; dimers = every 2-chain entry, homodimers
-#                        included; all = the whole dataset. The plot stage applies the
-#                        same filter to the tables, so a table scored with a wider
-#                        subset still draws the narrower figure without a rescore.
+#                        (default: dimers, n_chains == 2 — one native interface per
+#                        complex, so DockQ needs no averaging). hetero = heterodimer +
+#                        heteromer, the entries whose chains are not all one sequence;
+#                        all = the whole dataset, including the 3-to-11-chain homomers
+#                        and heteromers. The dataset has NO monomers: its categories are
+#                        homodimer (2 chains, 1 sequence), heterodimer (2, 2), homomer
+#                        (3-8, 1) and heteromer (3-11, 2-4). The plot stage applies the
+#                        same filter to the tables, so a table scored with a wider subset
+#                        still draws the narrower figure without a rescore.
 #   --msa-cache DIR      Existing AF3 MSA cache to reuse (repeatable).
 #                        Default: $DEFAULT_MSA_CACHE below.
 #   --db-dir DIR         AF3 search databases for submit-msa.
@@ -181,7 +183,7 @@ MAX_TEMPLATE_DATE="2021-09-30"
 STAGE=""
 BASE_DIR="$DEFAULT_BASE_DIR"
 CONFIG=""
-SUBSET="hetero"
+SUBSET="dimers"
 MSA_CACHES=()
 DB_DIR="$DEFAULT_DB_DIR"
 ARRAY_LIMIT=20
