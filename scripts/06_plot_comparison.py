@@ -280,8 +280,10 @@ def evaluated_rows(dockq_rows, profile_rows, arms, column) -> list[dict]:
 
 
 def write_directory(dockq_rows, profile_rows, configs, styles, baseline, *, out,
-                    column, subtitle, sources) -> None:
-    """One directory: its figures, its tables and the manifest saying what it was made from."""
+                    column, subtitle, sources, subset) -> None:
+    """One directory: its figures, its tables and the manifest saying what it was made from.
+    `subset` is recorded there because the three DockQ subsets write to the SAME directory —
+    without it, nothing in the output says whether a figure holds the dimers or the whole set."""
     arms = [c.short for c in configs]
     labels = {a: a for a in arms}
     out.mkdir(parents=True, exist_ok=True)
@@ -305,7 +307,7 @@ def write_directory(dockq_rows, profile_rows, configs, styles, baseline, *, out,
     fl.write_manifest(out, experiment=EXPERIMENT, script=SCRIPT, arms=configs,
                       baseline=baseline, sources=sources,
                       figures=[f for f in figures if f],
-                      extra={"runtime_column": column})
+                      extra={"runtime_column": column, "dockq_subset": subset})
 
 
 def main() -> int:
@@ -387,14 +389,15 @@ def main() -> int:
         out = fl.sweep_dir(EXPERIMENT, [c.short for c in configs], args.results_root)
         print(f"comparison -> {out}")
         write_directory(dockq_rows, profile_rows, configs, styles, baseline, out=out,
-                        column=args.runtime_column, subtitle=args.subtitle, sources=sources)
+                        column=args.runtime_column, subtitle=args.subtitle, sources=sources,
+                        subset=args.subset)
     if not args.no_individual:
         for c in configs:
             out_i = fl.individual_dir(EXPERIMENT, c.short, args.results_root)
             print(f"individual -> {out_i}")
             write_directory(dockq_rows, profile_rows, [c], styles, None, out=out_i,
                             column=args.runtime_column, subtitle=c.label,
-                            sources={c.short: sources[c.short]})
+                            sources={c.short: sources[c.short]}, subset=args.subset)
     return 0
 
 
