@@ -107,7 +107,8 @@ image (`configs/af3torchkit_big_ob_templateoff.json` and `configs/af3torchkit_bi
 `af3torch_kit`, `slurm/predict_af3torch_kit.sbatch`). The image is built from the fork branch
 `add-af3torch-openbind-porter` of juliabuhmann/uplifting-biomolecular-modeling, which ports the openbind
 checkpoint into xfold's parameter layout the way the JAX fork above does; it is scored with the stages
-below like any af3 arm. Not yet run at the time of writing.
+below like any af3 arm. Its Benchmark-IV result is under
+[af3_torch kit vs the AlphaFold 3 codebase](#af3_torch-kit-vs-the-alphafold-3-codebase) below.
 
 ### Performance
 
@@ -121,9 +122,18 @@ AlphaFold3 for Predicting Biomacromolecules and Their Interactions*, Briefings i
 Bioinformatics ([bbaf616](https://doi.org/10.1093/bib/bbaf616)), taken from the
 paper's own release, [Zenodo 15502855](https://zenodo.org/records/15502855).
 
-It is held out for *AlphaFold 3* but not for openbind — every target predates
-openbind's June 2025 cutoff — so the absolute DockQ values below are not held-out
-accuracy. Both configurations run the same weights, so the comparison between them is
+The paper selected structures released after 1 January 2024; the 203 targets used here
+were first released in the PDB between 2024-01-03 and 2024-05-22. That is after AlphaFold 3's
+training cutoff (30 September 2021) but more than a year before openbind's — the
+[OpenBind-0 announcement](https://openbind.uk/news/blog-openbind-0-advancing-open-molecular-structure-prediction/)
+states it is "trained on data from the Protein Data Bank (PDB) through June 2025". So the set is
+held out for *AlphaFold 3* but not for openbind, and the absolute DockQ values below are not
+held-out accuracy. To recheck the dates against the live PDB:
+
+```bash
+pixi run python scripts/10_pdb_release_stats.py entries \
+    --tsv results/benchmark/sweep/af3-ob_af3torchkit-big-ob/complexes_evaluated.tsv
+``` Both configurations run the same weights, so the comparison between them is
 unaffected.
 
 #### Setup
@@ -140,6 +150,91 @@ Per-complex values, per-interface metrics and inference times are in
 [`results/profiling.tsv`](results/profiling.tsv), where the `run` column names the arm:
 the two above, plus the templates-on pair on either weight set (`af3_openbind`,
 `af3_native`) and the paper's own predictions (`zheng_af3_local`).
+
+#### af3_torch kit vs the AlphaFold 3 codebase
+
+The same 203 complexes, same inputs and settings, predicted by Anthropic's `af3_torch`
+optimization kit (xfold, the PyTorch port of AlphaFold 3) on the same openbind weights, against
+the AlphaFold 3 JAX codebase (`af3-ob`). Each point is one complex:
+
+![DockQ per complex, AlphaFold 3 codebase vs the af3_torch kit in mode big, both on openbind weights](results/benchmark/sweep/af3-ob_af3torchkit-big-ob/dockq_scatter.png)
+
+Most complexes sit on the diagonal; a few move far in either direction. Per arm
+([`metrics.tsv`](results/benchmark/sweep/af3-ob_af3torchkit-big-ob/metrics.tsv)): median DockQ
+0.671 (`af3-ob`) vs 0.667 (kit), mean 0.525 vs 0.536, acceptable or better 69.5% vs 71.4%;
+19 complexes score more than 0.05 higher with the kit and 17 more than 0.05 lower. One seed, so
+single-complex swings may be sampling noise. Per-complex values are in
+[`complexes_evaluated.tsv`](results/benchmark/sweep/af3-ob_af3torchkit-big-ob/complexes_evaluated.tsv).
+
+On this card the kit was slower, not faster: median model time 150 s vs 69 s. Not tuned for it:
+the kit has no card file for the RTX PRO 6000 (compute capability 12.0), so it runs under its
+`h100` config label with `--allow-partial`, and some of its kernels fall back to the unoptimised
+path (`kit_partial: allowed:fallback` on every entry).
+
+**What was run.**
+
+- Kit: [juliabuhmann/uplifting-biomolecular-modeling](https://github.com/juliabuhmann/uplifting-biomolecular-modeling),
+  branch `add-af3torch-openbind-porter`, commit `6737cbf` (on the upstream kit release `f4f62fa`),
+  mode **`big`** as shipped (no levers switched off).
+- Image: `ghcr.io/juliabuhmann/af3_torch-kit:6737cbf` converted to `af3_torch-kit_obporter.sif`
+  (sha256 `6feb4448…3df01a6e`, full value in the config notes).
+- Weights: the openbind checkpoint `of3-ob-2025-06-30-174k`, converted by the kit to its weights
+  variant `ob` (converted file sha256 `d3995ad00cff…`, as the kit logs it).
+- Config: [`configs/af3torchkit_big_ob_templateoff.json`](configs/af3torchkit_big_ob_templateoff.json),
+  launcher [`slurm/predict_af3torch_kit.sbatch`](slurm/predict_af3torch_kit.sbatch); one SLURM array job on
+  RTX PRO 6000 GPUs, 2026-09-30 to 2026-10-01.
+
+**Building the image from the fork.** The fork's GitHub Actions workflow
+[`kit image`](https://github.com/juliabuhmann/uplifting-biomolecular-modeling/blob/add-af3torch-openbind-porter/.github/workflows/kit_image.yml)
+(`.github/workflows/kit_image.yml`) builds `af3_torch/environment/Dockerfile` from the repository root
+and pushes it to the GitHub Container Registry, tagged with the short commit. On Euler there is no
+Docker, so the image is converted with Apptainer:
+
+```bash
+# On GitHub: Actions -> "kit image" -> Run workflow, branch add-af3torch-openbind-porter, kit af3_torch.
+# Or locally, from the repository root at that commit:
+docker build -f af3_torch/environment/Dockerfile -t ghcr.io/juliabuhmann/af3_torch-kit:6737cbf .
+
+# On the cluster:
+apptainer build af3_torch-kit_obporter.sif docker://ghcr.io/juliabuhmann/af3_torch-kit:6737cbf
+```
+
+The weights are not in the image. They are converted once into a directory that the run then mounts,
+with the kit's own installer (`--variant ob` picks the openbind checkpoint):
+
+```bash
+singularity exec --nv --cleanenv --pwd /kit/af3_torch af3_torch-kit_obporter.sif \
+    bash run.sh install --weights <weights dir> --fetch --variant ob
+```
+
+**How it was run.** The same harness stages as every other arm. Only `submit-predictions` differs:
+for engine `af3torch_kit` it submits `slurm/predict_af3torch_kit.sbatch`, which runs per complex
+
+```bash
+singularity exec --nv --cleanenv --pwd /kit/af3_torch <image> bash run.sh pred \
+    --config h100 --mode big --allow-partial --json_path=<entry>.json --output_dir=<node-local dir> \
+    --model_dir=<weights dir> --norun_data_pipeline --num_recycles=3 --num_diffusion_samples=5
+```
+
+The MSAs are **precomputed**, not built by the kit: `--norun_data_pipeline` makes it read the
+same stage-03 AlphaFold 3 input JSONs, with the same MSAs (from stage 02's store), as every other
+arm. Templates are stripped (`use_templates: false`); seed 42.
+
+```bash
+./run_workflow.sh --stage submit-predictions --base-dir $AF3OF3_BASE_DIR \
+                  --config configs/af3torchkit_big_ob_templateoff.json
+./run_workflow.sh --stage score             --base-dir $AF3OF3_BASE_DIR --config configs/af3torchkit_big_ob_templateoff.json
+./run_workflow.sh --stage collect-profiling --base-dir $AF3OF3_BASE_DIR --config configs/af3torchkit_big_ob_templateoff.json
+pixi run plot-benchmark --arms af3-ob af3torchkit-big-ob --dockq $AF3OF3_BASE_DIR/results/dockq \
+                                                         --profile $AF3OF3_BASE_DIR/results/profiling
+```
+
+> **Disclaimer: this is performance on training-era data.** Every one of the 203 targets was
+> released in the PDB between January and May 2024, and the openbind weights were trained on the PDB
+> through June 2025. These structures were eligible for openbind's training set, so the DockQ values
+> above say how well the kit reproduces the AlphaFold 3 codebase on the same weights, not how well
+> either predicts unseen complexes. Whether a given target was actually in openbind's training set
+> (after its own filtering) was not checked.
 
 ### Where the figures are
 
