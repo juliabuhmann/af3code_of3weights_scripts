@@ -210,10 +210,14 @@ named **mode**: `off` (stock), `exact` (outputs identical to stock), `fast` (wit
 seed-to-seed variation) and `big` (lowest peak GPU memory, `fast`'s numerics). We ran two of them,
 on the same openbind weights and the same RTX PRO 6000 as the main comparison, through the same harness:
 
-| kit | codebase it optimizes | weights | card | what we measured | arms (`short`) |
-|---|---|---|---|---|---|
-| `openfold3_ob0` | OpenFold3 0.5.0 | openbind | RTX PRO 6000 | memory and time vs size | `of3kit-off`, `of3kit-big` (+ `exact`, `fast` configs) |
-| `af3_torch` | xfold (PyTorch port of AlphaFold 3) | openbind | RTX PRO 6000 | DockQ and time on Benchmark-IV | `af3torchkit-big-ob` |
+| kit (`short`) | codebase it optimizes | weights / card | what we measured | repository | branch | commit | image |
+|---|---|---|---|---|---|---|---|
+| `af3_torch` (`af3torchkit-big-ob`) | xfold, the PyTorch port of AlphaFold 3 | openbind / RTX PRO 6000 | DockQ and time on Benchmark-IV | fork [juliabuhmann/uplifting-biomolecular-modeling](https://github.com/juliabuhmann/uplifting-biomolecular-modeling) | `add-af3torch-openbind-porter` | `6737cbf` | `ghcr.io/juliabuhmann/af3_torch-kit:6737cbf`, converted to `af3_torch-kit_obporter.sif` |
+| `openfold3_ob0` (`of3kit-off`, `of3kit-big`) | OpenFold3 0.5.0 | openbind / RTX PRO 6000 | memory and time vs size | [anthropics/uplifting-biomolecular-modeling](https://github.com/anthropics/uplifting-biomolecular-modeling) | `main` (the release) | `f4f62fa` | none: a clone plus a host venv ([`profiling/setup_kit_env.sh`](profiling/setup_kit_env.sh)) |
+
+The fork branch starts from the release commit `f4f62fa`. For comparison, the AlphaFold 3 codebase
+every kit is measured against (`af3-ob`) is not a kit: it is [juliabuhmann/alphafold3](https://github.com/juliabuhmann/alphafold3),
+branch `add_openbind_porter`, image `ghcr.io/juliabuhmann/alphafold3:openbind-1fff5c4`.
 
 ### 2. How we did it
 
