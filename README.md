@@ -213,27 +213,29 @@ and the RTX PRO 6000:
 
 Our fork adds what `af3_torch` needs to load the openbind weights, plus a fix for the RTX PRO 6000.
 
-Neither kit officially supports this card, so both needed tweaks and some of their kernels fall back
-to slower code. Which kit and mode pays off depends on your GPU and the size of your typical input,
+Neither kit officially supports this card, so both needed tweaks. Which kit and mode pays off depends on your GPU and the size of your typical input,
 so it is worth measuring on your own hardware rather than taking the numbers below as general.
 
 ### Results
 
-**`openfold3_ob0` fits larger complexes and runs faster.** In mode `big` it reaches 6000 tokens,
-against 3500 for stock OpenFold3 and 5500 for the AlphaFold 3 codebase, and at 5000 tokens it is
-1.4x faster than the AlphaFold 3 codebase.
-
-![Model time against complex size: AlphaFold 3 codebase, stock OpenFold3 and the openfold3_ob0 kit in mode big](results/scaling/sweep/af3-ob_of3kit-off_of3kit-big/runtime_vs_tokens.png)
-
-**`af3_torch` matches the AlphaFold 3 codebase's accuracy but was slower on this card.** On the
-203 Benchmark-IV complexes, with the same precomputed MSAs and settings, median DockQ is 0.667
-against 0.671; median model time is 150 s against 69 s. Each point is one complex:
+**Accuracy.** `af3_torch` matches the AlphaFold 3 codebase. On the 203 Benchmark-IV complexes, with
+the same precomputed MSAs and settings, median DockQ is 0.667 against 0.671. Each point is one
+complex:
 
 ![DockQ per complex, AlphaFold 3 codebase vs the af3_torch kit in mode big, both on openbind weights](results/benchmark/sweep/af3-ob_af3torchkit-big-ob/dockq_scatter.png)
 
 As with the main benchmark, every target predates openbind's training cutoff
 ([Dataset](#dataset)), so this shows that the two codebases agree, not how well either predicts
 unseen complexes.
+
+**Runtime in practice.** We don't compare speed across the kits here, because they time their runs
+differently. Empirically, processing protein complexes in batch on our cluster took:
+
+| kit | complex size (tokens) | runtime per complex (min) |
+|---|---|---|
+| `openfold3_ob0` | 5000 | 11.9 |
+| `openfold3_ob0` | 6000 | 17.1 |
+| `af3_torch` | 4500 | 7.4 |
 
 ### Using `af3_torch` yourself
 
