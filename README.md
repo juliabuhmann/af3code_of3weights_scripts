@@ -228,11 +228,13 @@ As with the main benchmark, every target predates openbind's training cutoff
 ([Dataset](#dataset)), so this shows that the two codebases agree, not how well either predicts
 unseen complexes.
 
-**Runtime in practice.** We don't compare speed across the kits here, because they time their runs
-differently. Empirically, processing protein complexes in batch on our cluster took:
+**Runtime in practice.** The kits' own timers measure different things, so we don't compare those.
+Empirically, processing protein complexes in batch on our cluster took the following, with the
+AlphaFold 3 codebase without a kit as the reference:
 
-| kit | complex size (tokens) | runtime per complex (min) |
+| setup | complex size (tokens) | runtime per complex (min) |
 |---|---|---|
+| AlphaFold 3 codebase, no kit (reference) | 5000 | 16.1 |
 | `openfold3_ob0` | 5000 | 11.9 |
 | `openfold3_ob0` | 6000 | 17.1 |
 | `af3_torch` | 4500 | 7.4 |
