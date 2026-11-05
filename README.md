@@ -239,27 +239,36 @@ differently. Empirically, processing protein complexes in batch on our cluster t
 
 ### Using `af3_torch` yourself
 
-Build the image with the fork's `kit image` GitHub Action (branch `add-af3torch-openbind-porter`,
-kit `af3_torch`), then convert it on the cluster:
+The kit comes as a Docker image, built from the fork by its `kit image` GitHub Action:
+
+    ghcr.io/juliabuhmann/af3_torch-kit:6737cbf
+
+The weights are not inside; they go in a directory `$WEIGHTS` that you mount. Pick how to run the
+image and define `kit` as a shortcut for the kit's `run.sh` inside it.
+
+With Docker:
+
+```bash
+kit() { docker run --rm --gpus all -v $WEIGHTS:$WEIGHTS -v $PWD:$PWD -e AF3_TORCH_PARAMS_DIR=$WEIGHTS \
+            ghcr.io/juliabuhmann/af3_torch-kit:6737cbf bash run.sh "$@"; }
+```
+
+Where Docker is not available (e.g. on an HPC cluster), convert the image with Apptainer first. This
+is the route we ran:
 
 ```bash
 apptainer build af3_torch-kit_obporter.sif docker://ghcr.io/juliabuhmann/af3_torch-kit:6737cbf
+kit() { apptainer exec --nv --cleanenv --pwd /kit/af3_torch --bind $WEIGHTS:$WEIGHTS --bind $PWD:$PWD \
+            --env AF3_TORCH_PARAMS_DIR=$WEIGHTS af3_torch-kit_obporter.sif bash run.sh "$@"; }
 ```
 
-Convert the openbind weights once into an empty directory:
+Then, either way, convert the openbind weights once into an empty `$WEIGHTS`, and predict from an
+AlphaFold 3 input JSON that already contains its MSAs:
 
 ```bash
-singularity exec --nv --cleanenv --pwd /kit/af3_torch --bind $WEIGHTS:$WEIGHTS \
-    af3_torch-kit_obporter.sif bash run.sh install --weights $WEIGHTS --fetch --variant ob
-```
-
-Predict from an AlphaFold 3 input JSON that already contains its MSAs:
-
-```bash
-singularity exec --nv --cleanenv --pwd /kit/af3_torch \
-    --bind $WEIGHTS:$WEIGHTS:ro --bind $PWD:$PWD --env AF3_TORCH_PARAMS_DIR=$WEIGHTS \
-    af3_torch-kit_obporter.sif bash run.sh pred --config h100 --mode big --allow-partial \
-    --json_path=$PWD/input.json --output_dir=$PWD/out --model_dir=$WEIGHTS --norun_data_pipeline
+kit install --weights $WEIGHTS --fetch --variant ob
+kit pred --config h100 --mode big --allow-partial --json_path=$PWD/input.json --output_dir=$PWD/out \
+         --model_dir=$WEIGHTS --norun_data_pipeline
 ```
 
 Set `--config` to your card (`a100`, `h100` or `h200`). Our run's configuration is
