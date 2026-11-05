@@ -1,0 +1,28 @@
+{
+  "experiment": "benchmark",
+  "arms": [
+    {
+      "short": "af3torchkit-big-ob",
+      "config": "af3torchkit_big_ob_templateoff.json",
+      "name_tag": "af3torchkit_big_ob_templateoff",
+      "label": "AF3-torch kit `big` (xfold) + OpenFold3 openbind weights, no templates"
+    }
+  ],
+  "baseline": null,
+  "sources": {
+    "af3torchkit-big-ob": {
+      "dockq_table": "$AF3OF3_BASE_DIR/results/dockq/af3torchkit_big_ob_templateoff.tsv",
+      "dockq_rows": 203,
+      "profile_table": "$AF3OF3_BASE_DIR/results/profiling/af3torchkit_big_ob_templateoff.tsv",
+      "profile_rows": 203
+    }
+  },
+  "figures": [
+    "dockq_distribution.png",
+    "runtime_vs_size.png"
+  ],
+  "script": "scripts/06_plot_comparison.py",
+  "git_commit": "5ddf3f3+dirty",
+  "runtime_column": "model_s",
+  "dockq_subset": "all"
+}
