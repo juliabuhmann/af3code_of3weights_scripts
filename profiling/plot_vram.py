@@ -57,6 +57,7 @@ import figure_layout as fl  # noqa: E402
 import matplotlib  # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib import patheffects  # noqa: E402
 
 EXPERIMENT = "scaling"
 SCRIPT = "profiling/plot_vram.py"
@@ -237,7 +238,11 @@ def annotate_speedup(ax, arms: list[Arm], baseline: Arm | None, at_tokens: int |
         ax.annotate(text, xy=(at_tokens, value),
                     xytext=(-12 if to_left else 12, -6), textcoords="offset points",
                     va="top", ha="right" if to_left else "left",
-                    fontsize=11, color=fl.INK_TEXT)
+                    fontsize=11, color=fl.INK_TEXT,
+                    # A halo in the axes colour keeps the label legible where it crosses
+                    # another arm's curve.
+                    path_effects=[patheffects.withStroke(
+                        linewidth=4, foreground=plt.rcParams["axes.facecolor"])])
         print(f"  {arm.short}: {value:.0f} s at {at_tokens:,} tokens, "
               f"{ratio:.2f}x the baseline's {base:.0f} s")
     return f"at {at_tokens:,} tokens, against {baseline.short} ({base:.0f} s)"
