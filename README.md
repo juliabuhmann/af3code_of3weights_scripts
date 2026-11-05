@@ -207,37 +207,42 @@ Anthropic's [uplifting-biomolecular-modeling](https://github.com/anthropics/upli
 release (Apache 2.0, commit `f4f62fa`, published as-is and not maintained) ships drop-in inference
 optimization "kits" for open structure-prediction codebases. Each kit runs the upstream tool under a
 named **mode**: `off` (stock), `exact` (outputs identical to stock), `fast` (within stock's
-seed-to-seed variation) and `big` (lowest peak GPU memory, `fast`'s numerics). We ran three of them
-through the same harness as the main comparison:
+seed-to-seed variation) and `big` (lowest peak GPU memory, `fast`'s numerics). We ran two of them,
+on the same openbind weights and the same RTX PRO 6000 as the main comparison, through the same harness:
 
 | kit | codebase it optimizes | weights | card | what we measured | arms (`short`) |
 |---|---|---|---|---|---|
 | `openfold3_ob0` | OpenFold3 0.5.0 | openbind | RTX PRO 6000 | memory and time vs size | `of3kit-off`, `of3kit-big` (+ `exact`, `fast` configs) |
-| `af3_jax` | AlphaFold 3 (JAX) | OpenFold3 preview-2 | A100 80GB | memory and time vs size | `af3kit-{off,exact,fast,big}-a100` |
 | `af3_torch` | xfold (PyTorch port of AlphaFold 3) | openbind | RTX PRO 6000 | DockQ and time on Benchmark-IV | `af3torchkit-big-ob` |
 
 ### 2. How we did it
 
-- **Images from a fork.** The `af3_jax` and `af3_torch` kits run from container images built from
-  our fork [juliabuhmann/uplifting-biomolecular-modeling](https://github.com/juliabuhmann/uplifting-biomolecular-modeling).
-  Its `kit image` GitHub Action builds a kit's own `environment/Dockerfile`, pushes it to
-  `ghcr.io/juliabuhmann/<kit>-kit:<commit>`, and the cluster converts it with `apptainer build`.
-  `af3_jax` is the release with one build-only change (`c8a1147`). `af3_torch` is branch
-  `add-af3torch-openbind-porter` at `6737cbf`, which adds the openbind checkpoint as the kit's weights
-  variant `ob` (the same port the JAX fork above makes) and a chunked kernel for compute
-  capability 12.0. `openfold3_ob0` runs from a clone of the release at `f4f62fa` in a host venv
+- **`af3_torch`: an image from a fork.** The kit runs from a container image built from our fork
+  [juliabuhmann/uplifting-biomolecular-modeling](https://github.com/juliabuhmann/uplifting-biomolecular-modeling),
+  branch `add-af3torch-openbind-porter` at `6737cbf`. The branch adds the openbind checkpoint as the
+  kit's weights variant `ob` (the same port the JAX fork above makes) and a chunked kernel for compute
+  capability 12.0. Its `kit image` GitHub Action builds the kit's own `environment/Dockerfile`, pushes it
+  to `ghcr.io/juliabuhmann/af3_torch-kit:<commit>`, and the cluster converts it with `apptainer build`.
+  The weights are not in the image: the kit's installer (`run.sh install --weights DIR --fetch
+  --variant ob`) converts the checkpoint once into a directory the runs mount read-only.
+- **`openfold3_ob0`: the release as shipped.** It already carries the OpenBind-0 checkpoint and runs
+  from a clone of the release at `f4f62fa` in a host venv
   ([`profiling/setup_kit_env.sh`](profiling/setup_kit_env.sh)).
-- **Weights.** Not inside the images. Each kit converts the checkpoint once with its own installer
-  (`run.sh install --weights DIR --fetch`, `--variant ob` for openbind on `af3_torch`) into a
-  directory the runs mount read-only.
 - **Same inputs as every other arm.** Precomputed MSAs (stage 02's store, written into stage 03's
   AlphaFold 3 input JSONs, read with `--norun_data_pipeline`), templates stripped, 3 recycles,
   5 diffusion samples, seed 42. Only the launcher differs: each kit arm is a config in
   [`configs/`](configs/) with a `launcher` block naming the image or clone, the mode and the card file.
 - **Outside the kits' tested hardware.** The kits ship card files for data-centre GPUs (A100, H100,
-  H200; `openfold3_ob0` also B200 and B300). The RTX PRO 6000 (compute capability 12.0) has none, so it runs under the `h100` label and
-  kernels without tuned rows for this card fall back to the kit's safe path (`--allow-partial`).
-  Speed-ups on this card are a lower bound on what a kit does on its own hardware.
+  H200; `openfold3_ob0` also B200 and B300). The RTX PRO 6000 (compute capability 12.0) has none, so
+  it runs under the `h100` label and kernels without tuned rows for this card fall back to the kit's
+  safe path (`--allow-partial`). It also needed bespoke tweaks: the chunked kernel above for
+  `af3_torch`, and for `openfold3_ob0` one `fast` lever disabled by name because it refuses on this
+  architecture. Speed-ups on this card are a lower bound on what a kit does on its own hardware.
+
+Which kit and mode pays off depends on the GPU and on the size of the inputs you mostly run, so it is
+worth building and measuring a setup for your own hardware and median input size rather than taking
+the numbers below as general. Some combinations, like ours on the RTX PRO 6000, will need bespoke
+tweaks before they run well.
 
 Per-kit details (lever choices, warm-up, how memory is read) are in
 [`profiling/README.md`](profiling/README.md).
@@ -255,18 +260,6 @@ OpenFold3 (`of3kit-off`) runs out of memory at 4000 tokens, the AlphaFold 3 code
 263 s against 775 s for stock OpenFold3 and 366 s for the AlphaFold 3 codebase; at 5000 tokens it
 is 1.40x faster than the AlphaFold 3 codebase (570 s vs 796 s). `of3kit-big` here is `big` with
 the kit's reach gate held open (fused kernels and offload at every size).
-
-#### Reach and speed: `af3_jax` on the A100
-
-![Wall-clock time against complex size, the af3_jax kit's four modes and the AlphaFold 3 codebase on an A100](results/scaling/sweep/af3-ob-a100_af3kit-off-a100_af3kit-exact-a100_af3kit-fast-a100_af3kit-big-a100/wall_vs_tokens.png)
-
-From [`metrics.tsv`](results/scaling/sweep/af3-ob-a100_af3kit-off-a100_af3kit-exact-a100_af3kit-fast-a100_af3kit-big-a100/metrics.tsv):
-`off` and `exact` reach 5000 tokens, `fast` 4500 and `big` 5500. At 4500 tokens the wall time
-(one query per run, everything included) is 1115 s for `off`, 768 s for `fast` and 958 s for `big`.
-Wall time is shown rather than model time because the kit modes' logs carry no featurisation timer,
-so their `model_s` leaves out the 10–50 s that `off`'s includes. These arms run the kit as shipped,
-on the preview-2 weights; `af3-ob-a100` (the AlphaFold 3 codebase on openbind) is the card baseline,
-not a same-weights comparison.
 
 #### Accuracy: `af3_torch` on Benchmark-IV
 
@@ -300,8 +293,8 @@ What ran: fork commit `6737cbf` (on the release `f4f62fa`), mode `big` as shippe
 
 ### 4. Using a kit yourself
 
-The `af3_torch` kit on the openbind weights, from the fork; the other two kits follow the same
-pattern ([`profiling/README.md`](profiling/README.md)).
+The `af3_torch` kit on the openbind weights, from the fork. For `openfold3_ob0`, which runs from a
+host venv instead of an image, see [`profiling/README.md`](profiling/README.md).
 
 **Build the image.** On GitHub, run the fork's `kit image` action (Actions → "kit image" → Run
 workflow, branch `add-af3torch-openbind-porter`, kit `af3_torch`), or build it locally from the
