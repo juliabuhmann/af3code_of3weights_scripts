@@ -194,6 +194,9 @@ def report_entries(tsv: str, column: str) -> None:
     width = max(len(k) for k in buckets)
     for label, n in buckets.most_common():
         print(f"  {label:<{width}}  {n:>4}  ({n / len(entry_ids):.1%})")
+    if dates:
+        found = sorted(dates.values())
+        print(f"  release dates: earliest {found[0]}, latest {found[-1]}")
     if missing:
         print(f"  missing: {', '.join(missing)}", file=sys.stderr)
 
