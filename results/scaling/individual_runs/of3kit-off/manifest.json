@@ -1,0 +1,29 @@
+{
+  "experiment": "scaling",
+  "arms": [
+    {
+      "short": "of3kit-off",
+      "config": "of3kit_off_templateoff.json",
+      "name_tag": "of3kit_off_templateoff",
+      "label": "OF3 code + stock OpenFold3 0.5.0 as the kit defines it, no templates, openbind weights"
+    }
+  ],
+  "baseline": null,
+  "sources": {
+    "of3kit-off": {
+      "table": "$AF3OF3_BASE_DIR/profiling/of3kit_off_templateoff/vram_sweep.tsv",
+      "rows": 8,
+      "ok_rows": 7
+    }
+  },
+  "figures": [
+    "inference_vs_tokens.png",
+    "runtime_vs_tokens.png",
+    "vram_vs_tokens.png",
+    "wall_vs_tokens.png"
+  ],
+  "script": "profiling/plot_vram.py",
+  "git_commit": "df84402",
+  "metric": "peak_alloc_gib",
+  "speedup_at_tokens": null
+}

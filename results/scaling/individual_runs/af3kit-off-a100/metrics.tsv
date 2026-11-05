@@ -1,0 +1,12 @@
+arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	featurisation_s	inference_s	model_source	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver
+af3kit_off_p2_templateoff_a100	af3	p2	false	500	2	ok	2641.9	2.58		77571	75.75	81920	64	42.1	10.2	31.9	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_off_p2_templateoff_a100	af3	p2	false	1000	4	ok	4986.9	4.87		77571	75.75	81920	100	77.9	15.9	62.1	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_off_p2_templateoff_a100	af3	p2	false	1500	6	ok	9420.8	9.20		77571	75.75	81920	159	137.6	20.1	117.5	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_off_p2_templateoff_a100	af3	p2	false	2000	8	ok	15523.8	15.16		77571	75.75	81920	256	232.5	24.2	208.3	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_off_p2_templateoff_a100	af3	p2	false	2500	10	ok	18749.4	18.31		77573	75.75	81920	340	317.1	28.6	288.5	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_off_p2_templateoff_a100	af3	p2	false	3000	12	ok	25344.0	24.75		77575	75.76	81920	465	440.0	32.8	407.2	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_off_p2_templateoff_a100	af3	p2	false	3500	14	ok	34129.9	33.33		77575	75.76	81920	641	616.6	37.2	579.4	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_off_p2_templateoff_a100	af3	p2	false	4000	16	ok	44298.2	43.26		77577	75.76	81920	858	832.3	41.6	790.8	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_off_p2_templateoff_a100	af3	p2	false	4500	18	ok	55859.2	54.55		77577	75.76	81920	1115	1088.8	45.3	1043.5	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_off_p2_templateoff_a100	af3	p2	false	5000	20	ok	68782.1	67.17		77577	75.76	81920	1437	1410.3	49.7	1360.6	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_off_p2_templateoff_a100	af3	p2	false	5500	22	gpu_oom	4126.7	4.03		77535	75.72	81920	105					1	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04

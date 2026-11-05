@@ -1,0 +1,29 @@
+{
+  "experiment": "scaling",
+  "arms": [
+    {
+      "short": "af3kit-big-a100",
+      "config": "af3kit_big_p2_templateoff_a100.json",
+      "name_tag": "af3kit_big_p2_templateoff_a100",
+      "label": "AF3 code + Anthropic kit `big` + OpenFold3 preview-2 weights, no templates, A100"
+    }
+  ],
+  "baseline": null,
+  "sources": {
+    "af3kit-big-a100": {
+      "table": "$AF3OF3_BASE_DIR/profiling/af3kit_big_p2_templateoff_a100/vram_sweep.tsv",
+      "rows": 12,
+      "ok_rows": 11
+    }
+  },
+  "figures": [
+    "inference_vs_tokens.png",
+    "runtime_vs_tokens.png",
+    "vram_vs_tokens.png",
+    "wall_vs_tokens.png"
+  ],
+  "script": "profiling/plot_vram.py",
+  "git_commit": "df84402",
+  "metric": "peak_alloc_gib",
+  "speedup_at_tokens": null
+}

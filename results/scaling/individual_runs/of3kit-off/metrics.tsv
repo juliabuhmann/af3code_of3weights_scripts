@@ -1,0 +1,9 @@
+arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	featurisation_s	inference_s	model_source	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver
+of3kit_off_templateoff	of3	openbind	false	500	2	ok	11748.3	11.47	12260.0	12925	12.62	97887	30	16.9	3.9	13.0	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_off_templateoff	of3	openbind	false	1000	4	ok	13741.0	13.42	15460.0	16125	15.75	97887	65	50.5	7.1	43.4	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_off_templateoff	of3	openbind	false	1500	6	ok	24464.4	23.89	25660.0	26325	25.71	97887	129	116.2	10.6	105.6	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_off_templateoff	of3	openbind	false	2000	8	ok	40266.9	39.32	41704.0	42369	41.38	97887	217	204.2	14.7	189.5	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_off_templateoff	of3	openbind	false	2500	10	ok	58571.4	57.20	61736.0	62401	60.94	97887	332	318.0	18.9	299.1	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_off_templateoff	of3	openbind	false	3000	12	ok	58376.7	57.01	63776.0	64441	62.93	97887	527	512.2	23.5	488.7	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_off_templateoff	of3	openbind	false	3500	14	ok	78831.9	76.98	83854.0	84519	82.54	97887	790	775.1	28.6	746.5	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_off_templateoff	of3	openbind	false	4000	16	gpu_oom	94728.5	92.51	95012.0	97015	94.74	97887	1205					0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04

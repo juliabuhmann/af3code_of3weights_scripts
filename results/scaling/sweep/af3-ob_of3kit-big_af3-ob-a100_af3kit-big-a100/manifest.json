@@ -1,0 +1,63 @@
+{
+  "experiment": "scaling",
+  "arms": [
+    {
+      "short": "af3-ob",
+      "config": "af3_openbind_templateoff.json",
+      "name_tag": "af3_openbind_templateoff",
+      "label": "AF3 code + OpenFold3 openbind weights, no templates"
+    },
+    {
+      "short": "of3kit-big",
+      "config": "of3kit_big_reachoff_templateoff.json",
+      "name_tag": "of3kit_big_reachoff_templateoff",
+      "label": "OF3 code + Anthropic kit `big` (fused kernels + offload at every size), no templates, openbind weights"
+    },
+    {
+      "short": "af3-ob-a100",
+      "config": "af3_openbind_templateoff_a100.json",
+      "name_tag": "af3_openbind_templateoff_a100",
+      "label": "AF3 code + OpenFold3 openbind weights, no templates, A100"
+    },
+    {
+      "short": "af3kit-big-a100",
+      "config": "af3kit_big_p2_templateoff_a100.json",
+      "name_tag": "af3kit_big_p2_templateoff_a100",
+      "label": "AF3 code + Anthropic kit `big` + OpenFold3 preview-2 weights, no templates, A100"
+    }
+  ],
+  "baseline": "af3-ob",
+  "sources": {
+    "af3-ob": {
+      "table": "$AF3OF3_BASE_DIR/profiling/af3_openbind_templateoff/vram_sweep.tsv",
+      "rows": 12,
+      "ok_rows": 11
+    },
+    "of3kit-big": {
+      "table": "$AF3OF3_BASE_DIR/profiling/of3kit_big_reachoff_templateoff/vram_sweep.tsv",
+      "rows": 13,
+      "ok_rows": 12
+    },
+    "af3-ob-a100": {
+      "table": "$AF3OF3_BASE_DIR/profiling/af3_openbind_templateoff_a100/vram_sweep.tsv",
+      "rows": 11,
+      "ok_rows": 10
+    },
+    "af3kit-big-a100": {
+      "table": "$AF3OF3_BASE_DIR/profiling/af3kit_big_p2_templateoff_a100/vram_sweep.tsv",
+      "rows": 12,
+      "ok_rows": 11
+    }
+  },
+  "figures": [
+    "inference_vs_tokens.png",
+    "ratio_vs_tokens.png",
+    "runtime_vs_tokens.png",
+    "vram_vs_tokens.png",
+    "wall_vs_tokens.png"
+  ],
+  "script": "profiling/plot_vram.py",
+  "git_commit": "df84402",
+  "metric": "peak_alloc_gib",
+  "speedup_at_tokens": 5000
+}

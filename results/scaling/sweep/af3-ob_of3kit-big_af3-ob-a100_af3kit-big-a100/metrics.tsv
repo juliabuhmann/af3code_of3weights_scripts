@@ -1,0 +1,49 @@
+arm	engine	weights	use_templates	tokens	n_chains	status	peak_alloc_mib	peak_alloc_gib	peak_reserved_mib	peak_vram_mib	peak_vram_gib	gpu_total_mib	wall_s	model_s	featurisation_s	inference_s	model_source	exit_code	num_diffusion_samples	num_recycles	mem_fraction	gpu_name	driver
+af3_openbind_templateoff	af3	openbind	false	500	2	ok	2613.1	2.55	92388.0	93009	90.83	97887	47	31.1	9.3	21.7	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	1000	4	ok	5461.1	5.33	92388.0	93009	90.83	97887	72	54.8	14.3	40.5	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	1500	6	ok	9510.0	9.29	92388.0	93009	90.83	97887	106	88.7	18.1	70.6	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	2000	8	ok	15035.6	14.68	92388.0	93009	90.83	97887	151	133.8	22.0	111.8	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	2500	10	ok	18665.7	18.23	92388.0	93011	90.83	97887	211	193.7	25.8	167.9	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	3000	12	ok	26372.3	25.75	92388.0	93011	90.83	97887	289	270.2	29.7	240.5	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	3500	14	ok	35297.2	34.47	92388.0	93011	90.83	97887	385	366.5	33.4	333.1	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	4000	16	ok	45601.7	44.53	92388.0	93013	90.83	97887	496	476.3	37.3	439.0	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	4500	18	ok	57269.0	55.93	92388.0	93013	90.83	97887	646	625.3	41.0	584.3	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	5000	20	ok	70304.6	68.66	92388.0	93013	90.83	97887	817	796.0	44.9	751.1	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	5500	22	ok	80866.7	78.97	92388.0	93013	90.83	97887	983	961.0	48.8	912.2	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff	af3	openbind	false	6000	24	gpu_oom	4616.2	4.51	92388.0	92985	90.81	97887	93					1	5	3	0.95	NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	500	2	ok	8495.4	8.30	11530.0	16397	16.01	97887	23	10.0	4.0	6.1	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	1000	4	ok	12864.1	12.56	19040.0	22049	21.53	97887	35	22.4	7.2	15.2	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	1500	6	ok	18598.7	18.16	21518.0	26383	25.76	97887	66	53.5	11.7	41.8	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	2000	8	ok	30237.1	29.53	33954.0	34753	33.94	97887	96	82.2	16.5	65.7	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	2500	10	ok	29750.0	29.05	31046.0	31847	31.10	97887	149	133.7	21.1	112.6	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	3000	12	ok	25376.1	24.78	29006.0	29821	29.12	97887	206	189.8	27.1	162.6	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	3500	14	ok	42691.8	41.69	44046.0	44863	43.81	97887	281	263.4	32.4	231.0	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	4000	16	ok	49881.3	48.71	51048.0	51879	50.66	97887	359	339.4	41.5	297.9	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	4500	18	ok	47801.1	46.68	50726.0	51571	50.36	97887	473	452.0	46.8	405.2	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	5000	20	ok	58563.8	57.19	63650.0	64497	62.99	97887	592	570.3	53.1	517.2	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	5500	22	ok	70449.4	68.80	72888.0	73767	72.04	97887	729	703.9	66.8	637.1	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	6000	24	ok	83458.0	81.50	90852.0	91755	89.60	97887	885	857.5	73.5	784.0	of3 predict timeline (featurise+inference)	0	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+of3kit_big_reachoff_templateoff	of3	openbind	false	6500	26	gpu_oom	93236.2	91.05	94980.0	95881	93.63	97887	147					1	5	3		NVIDIA RTX PRO 6000 Blackwell Server Edition	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	500	2	ok	2580.1	2.52	77096.0	77571	75.75	81920	60	40.5	10.2	30.3	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	1000	4	ok	5303.0	5.18	77096.0	77571	75.75	81920	91	72.7	15.5	57.1	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	1500	6	ok	9510.0	9.29	77096.0	77571	75.75	81920	148	127.5	20.0	107.5	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	2000	8	ok	15528.5	15.16	77096.0	77571	75.75	81920	240	217.2	24.6	192.7	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	2500	10	ok	18752.9	18.31	77096.0	77573	75.75	81920	311	290.2	28.9	261.4	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	3000	12	ok	26372.3	25.75	77096.0	77575	75.76	81920	444	418.7	32.7	386.1	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	3500	14	ok	35326.7	34.50	77096.0	77575	75.76	81920	607	584.9	36.8	548.0	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	4000	16	ok	45675.3	44.60	77096.0	77577	75.76	81920	814	791.1	41.2	749.9	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	4500	18	ok	57396.7	56.05	77096.0	77577	75.76	81920	1063	1036.9	45.5	991.4	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	5000	20	ok	70496.5	68.84	77096.0	77577	75.76	81920	1384	1357.9	50.6	1307.3	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3_openbind_templateoff_a100	af3	openbind	false	5500	22	gpu_oom	4131.6	4.03	77096.0	77535	75.72	81920	104					1	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	500	2	ok	2549.8	2.49		77567	75.75	81920	55	32.6	0.0	32.6	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	1000	4	ok	5079.0	4.96		77567	75.75	81920	73	50.5	0.0	50.5	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	1500	6	ok	7086.1	6.92		77577	75.76	81920	129	105.9	0.0	105.9	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	2000	8	ok	11376.6	11.11		77577	75.76	81920	185	161.1	0.0	161.1	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	2500	10	ok	16855.0	16.46		77579	75.76	81920	282	254.0	0.0	254.0	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	3000	12	ok	22630.4	22.10		77581	75.76	81920	393	362.1	0.0	362.1	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	3500	14	ok	30330.9	29.62		77583	75.76	81920	539	504.6	0.0	504.6	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	4000	16	ok	39239.7	38.32		77585	75.77	81920	717	678.3	0.0	678.3	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	4500	18	ok	49305.6	48.15		77587	75.77	81920	958	912.0	0.0	912.0	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	5000	20	ok	60600.3	59.18		77589	75.77	81920	1241	1190.1	0.0	1190.1	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	5500	22	ok	71311.4	69.64		77593	75.77	81920	1547	1492.7	0.0	1492.7	af3 log (featurise+inference)	0	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04
+af3kit_big_p2_templateoff_a100	af3	p2	false	6000	24	gpu_oom	4618.2	4.51		77535	75.72	81920	139					1	5	3	0.95	NVIDIA A100 80GB PCIe	580.178.04

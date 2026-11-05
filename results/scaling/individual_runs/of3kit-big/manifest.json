@@ -1,0 +1,29 @@
+{
+  "experiment": "scaling",
+  "arms": [
+    {
+      "short": "of3kit-big",
+      "config": "of3kit_big_reachoff_templateoff.json",
+      "name_tag": "of3kit_big_reachoff_templateoff",
+      "label": "OF3 code + Anthropic kit `big` (fused kernels + offload at every size), no templates, openbind weights"
+    }
+  ],
+  "baseline": null,
+  "sources": {
+    "of3kit-big": {
+      "table": "$AF3OF3_BASE_DIR/profiling/of3kit_big_reachoff_templateoff/vram_sweep.tsv",
+      "rows": 13,
+      "ok_rows": 12
+    }
+  },
+  "figures": [
+    "inference_vs_tokens.png",
+    "runtime_vs_tokens.png",
+    "vram_vs_tokens.png",
+    "wall_vs_tokens.png"
+  ],
+  "script": "profiling/plot_vram.py",
+  "git_commit": "df84402",
+  "metric": "peak_alloc_gib",
+  "speedup_at_tokens": null
+}
