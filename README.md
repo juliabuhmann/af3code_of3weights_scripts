@@ -284,4 +284,10 @@ from the [OpenFold consortium](https://github.com/aqlaboratory/openfold-3). Than
 Jürgen Jänes for support along the way. This work was carried out in the
 [Beltrao lab](https://beltraolab.com/) at ETH Zurich.
 
+The optimization kits are Anthropic's, released with
+[How Claude is uplifting biomolecular modeling](https://www.anthropic.com/research/claude-uplifts-biomolecular-modeling)
+at [anthropics/uplifting-biomolecular-modeling](https://github.com/anthropics/uplifting-biomolecular-modeling);
+the `af3_torch` kit here runs from our fork of it,
+[juliabuhmann/uplifting-biomolecular-modeling](https://github.com/juliabuhmann/uplifting-biomolecular-modeling).
+
 The code in this repository was written by Claude, supervised by Julia Buhmann.
